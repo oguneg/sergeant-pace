@@ -1,0 +1,491 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sergeant Pace</title>
+<style>
+  :root {
+    --bg: #12150e; --panel: #1c2115; --panel2: #252b1c; --line: #343c28;
+    --text: #e9ecdf; --muted: #9aa388; --amber: #f0a81c; --red: #d9473a; --green: #7fbf4d;
+    --warm: #6b7560; --walk: #4a90c2; --run: #f0a81c;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.5 ui-sans-serif, system-ui, -apple-system, sans-serif; min-height: 100vh; }
+  .hidden { display: none !important; }
+  header { padding: 14px 16px; border-bottom: 2px solid var(--amber); display: flex; align-items: center; gap: 12px; }
+  h1 { margin: 0; font-size: 20px; letter-spacing: 3px; text-transform: uppercase; color: var(--amber); }
+  .where { color: var(--muted); font-size: 14px; }
+  header .right { margin-left: auto; display: flex; gap: 8px; }
+  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 60px; }
+
+  button { background: var(--amber); color: #1a1405; border: 0; border-radius: 8px; padding: 14px 20px; font: inherit; font-weight: 700; cursor: pointer; text-transform: uppercase; letter-spacing: 1px; }
+  button.big { width: 100%; padding: 18px; font-size: 18px; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 500; text-transform: none; letter-spacing: 0; padding: 7px 14px; font-size: 14px; }
+  button.link { background: none; border: 0; color: var(--muted); text-transform: none; letter-spacing: 0; font-weight: 400; padding: 8px; text-decoration: underline; font-size: 14px; }
+  button.choice { display: block; width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--line); text-transform: none; letter-spacing: 0; font-weight: 600; text-align: left; margin-bottom: 12px; }
+  button.choice:hover { border-color: var(--amber); }
+  button:disabled { opacity: .5; cursor: wait; }
+  label { display: block; font-size: 14px; color: var(--muted); margin-bottom: 6px; }
+  input, textarea { width: 100%; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; color: var(--text); font: inherit; }
+  input[type=range] { padding: 0; accent-color: var(--amber); height: 36px; background: none; border: 0; }
+  input:focus, textarea:focus { outline: 2px solid var(--amber); border-color: transparent; }
+  .field { margin-bottom: 16px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .nav { display: flex; gap: 12px; align-items: center; margin-top: 8px; }
+  .nav button:last-child { flex: 1; }
+
+  .say { display: flex; gap: 12px; margin-bottom: 22px; align-items: flex-start; }
+  .avatar { font-size: 38px; line-height: 1; }
+  .bubble { position: relative; background: var(--panel2); border: 1px solid #5a2c26; border-radius: 10px; padding: 14px 16px; flex: 1; font-size: 18px; }
+  .bubble::before { content: ""; position: absolute; left: -7px; top: 16px; width: 12px; height: 12px; background: var(--panel2); border-left: 1px solid #5a2c26; border-bottom: 1px solid #5a2c26; transform: rotate(45deg); }
+  .bubble.reply { font-size: 18px; }
+  .bubble ul { margin: 6px 0; padding-left: 20px; }
+  .bubble div + div { margin-top: 8px; }
+  .dots { display: flex; gap: 6px; justify-content: center; margin-top: 22px; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--line); }
+  .dots i.on { background: var(--amber); }
+
+  .eyebrow { color: var(--amber); font-size: 13px; letter-spacing: 2px; text-transform: uppercase; }
+  .title { font-size: 28px; font-weight: 700; line-height: 1.2; margin: 4px 0 18px; }
+  .bars { display: flex; gap: 2px; height: 60px; position: relative; }
+  .seg { display: flex; align-items: center; justify-content: center; border-radius: 3px; min-width: 6px; font-size: 12px; font-weight: 700; color: #10130b; overflow: hidden; }
+  .seg.warmup, .seg.cooldown { background: var(--warm); color: #e9ecdf; }
+  .seg.walk { background: var(--walk); }
+  .seg.run { background: var(--run); }
+  .marker { position: absolute; top: -6px; bottom: -6px; width: 3px; background: #fff; border-radius: 2px; left: 0; }
+  .axis { display: flex; justify-content: space-between; color: var(--muted); font-size: 13px; margin: 4px 0 18px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin: 8px 0 20px; }
+  .legend i { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 6px; }
+  .tip { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; margin-bottom: 18px; color: var(--muted); font-size: 15px; }
+  .tip b { color: var(--text); }
+  ol.steps { padding-left: 22px; color: var(--muted); font-size: 15px; margin: 0 0 18px; }
+  ol.steps li { margin-bottom: 6px; }
+  .secondary { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; margin-top: 10px; }
+  details.demo { margin-top: 26px; color: var(--muted); font-size: 13px; text-align: center; }
+  details.demo summary { cursor: pointer; }
+  details.demo div { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; margin-top: 8px; }
+
+  .now { text-align: center; padding: 10px 0 6px; }
+  .now .what { font-size: 40px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
+  .now .what.run { color: var(--run); } .now .what.walk { color: var(--walk); } .now .what.warmup, .now .what.cooldown { color: var(--muted); } .now .what.done { color: var(--green); }
+  .now .count { font-size: 72px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; }
+  .now .sub { color: var(--muted); margin-bottom: 26px; min-height: 26px; }
+
+  .numgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(64px, 1fr)); gap: 10px; margin: 18px 0; }
+  .numgrid button { padding: 18px 0; font-size: 22px; background: var(--panel); color: var(--text); border: 1px solid var(--line); }
+  .numgrid button:hover { border-color: var(--amber); }
+  .bignum { font-size: 56px; font-weight: 800; text-align: center; color: var(--amber); }
+  .effort-word { text-align: center; font-size: 20px; color: var(--muted); margin-bottom: 12px; }
+
+  .result { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .pill { background: var(--panel); border: 1px solid var(--line); border-radius: 20px; padding: 4px 14px; font-size: 14px; }
+  .pill.bad { border-color: var(--red); color: #ff9c92; } .pill.good { border-color: var(--green); color: var(--green); }
+  .banner { border: 1px solid var(--amber); background: #2a2410; border-radius: 8px; padding: 10px 14px; margin-bottom: 16px; font-size: 15px; }
+  .upnext { color: var(--muted); margin: 14px 0 22px; font-size: 15px; }
+  .upnext b { color: var(--text); }
+  .chip { font: 12px ui-monospace, Menlo, monospace; background: var(--bg); border: 1px solid var(--line); color: var(--green); border-radius: 4px; padding: 2px 8px; display: inline-block; margin: 4px 4px 0 0; }
+  .spin { text-align: center; color: var(--muted); font-style: italic; padding: 30px 0; }
+  .error { color: var(--red); margin-top: 14px; text-align: center; }
+
+  /* plan drawer */
+  .drawer { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 10; display: flex; justify-content: flex-end; }
+  .drawer .sheet { width: min(480px, 100%); height: 100%; background: var(--bg); border-left: 1px solid var(--line); padding: 18px; overflow-y: auto; }
+  .sheet h2 { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin: 22px 0 10px; }
+  .sheet h2:first-of-type { margin-top: 6px; }
+  .ladder { display: flex; gap: 8px; }
+  .rung { flex: 1; text-align: center; padding: 8px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--muted); font-size: 12px; }
+  .rung b { display: block; font-size: 16px; color: var(--text); }
+  .rung.done { border-color: var(--green); } .rung.done b { color: var(--green); }
+  .rung.current { border-color: var(--amber); } .rung.current b { color: var(--amber); }
+  .week h4 { margin: 8px 0 4px; font-size: 14px; color: var(--muted); }
+  .prow { display: flex; gap: 12px; padding: 6px 10px; border-radius: 6px; font-size: 15px; }
+  .prow .d { width: 50px; font-weight: 700; flex: none; }
+  .prow.now-row { background: #2a2410; border: 1px solid var(--amber); }
+  .hist { padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+  .hist .flag { color: var(--red); font-size: 12px; margin-left: 6px; }
+  .sheet form { display: flex; gap: 8px; }
+  .sheet form button { padding: 10px 14px; }
+</style>
+</head>
+<body>
+<header id="topbar" class="hidden">
+  <h1>Sergeant Pace</h1><span class="where" id="where"></span>
+  <div class="right"><button class="ghost" id="open-plan">Plan</button></div>
+</header>
+<header id="brand">
+  <h1>Sergeant Pace</h1><span class="where">Couch to marathon. No excuses.</span>
+</header>
+
+<main>
+  <!-- ONBOARDING: one question at a time -->
+  <section id="s-onboard" class="hidden">
+    <div id="ob-body"></div>
+    <div class="dots" id="ob-dots"></div>
+  </section>
+
+  <!-- THINKING -->
+  <section id="s-thinking" class="hidden">
+    <div class="say"><div class="avatar">🪖</div><div class="bubble" id="think-msg"></div></div>
+    <div class="spin">...</div>
+  </section>
+
+  <!-- READY: the next run, kept short -->
+  <section id="s-ready" class="hidden">
+    <div class="eyebrow" id="r-when"></div>
+    <div class="title" id="r-what"></div>
+    <div class="bars" id="r-bars"></div>
+    <div class="axis"><span>0 min</span><span id="r-total"></span></div>
+    <div class="legend">
+      <span><i style="background:var(--warm)"></i>Warm-up / cool-down</span>
+      <span><i style="background:var(--run)"></i>Run</span>
+      <span><i style="background:var(--walk)"></i>Walk</span>
+    </div>
+    <div class="tip" id="r-tip"></div>
+    <details id="r-more"><summary class="link" style="cursor:pointer;color:var(--muted);margin-bottom:10px">How it works</summary><ol class="steps" id="r-steps"></ol></details>
+    <button class="big" id="start-run">Start run</button>
+    <div class="secondary"><button class="link" id="skip-run">I'm skipping this one</button></div>
+    <details class="demo"><summary>Demo tools</summary>
+      <div><button class="ghost" data-sim="good">fake: went well</button><button class="ghost" data-sim="hard">fake: too hard</button>
+        <button class="ghost" data-sim="hurt">fake: injured</button><button class="ghost" data-sim="skip">fake: skipped</button></div>
+    </details>
+  </section>
+
+  <!-- RUNNING: live guide -->
+  <section id="s-running" class="hidden">
+    <div class="now"><div class="what" id="n-what"></div><div class="count" id="n-count"></div><div class="sub" id="n-sub"></div></div>
+    <div class="bars" id="n-bars"><div class="marker" id="marker"></div></div>
+    <div class="axis"><span id="n-elapsed"></span><span id="n-total"></span></div>
+    <button class="big" id="finish-run" style="margin-top:20px">I'm done</button>
+    <div class="secondary"><button class="link" id="cancel-run">Back</button></div>
+  </section>
+
+  <!-- REPORT: two quick questions -->
+  <section id="s-reportA" class="hidden">
+    <div class="say"><div class="avatar">🪖</div><div class="bubble" id="ra-say"></div></div>
+    <div id="ra-body"></div>
+  </section>
+  <section id="s-reportB" class="hidden">
+    <div class="say"><div class="avatar">🪖</div><div class="bubble">How hard did it feel? Be honest, I can tell.</div></div>
+    <div class="bignum" id="e-num">5</div>
+    <div class="effort-word" id="e-word"></div>
+    <input type="range" id="effort" min="1" max="10" value="5">
+    <div class="axis"><span>very easy</span><span>all out</span></div>
+    <button class="link" id="add-note">Add a note (pain, excuses)</button>
+    <textarea id="notes" rows="2" class="hidden" placeholder="e.g. my knee hurts"></textarea>
+    <button class="big" id="send-report" style="margin-top:14px">Send to the sergeant</button>
+  </section>
+
+  <!-- FEEDBACK -->
+  <section id="s-feedback" class="hidden">
+    <div class="result" id="f-result"></div>
+    <div class="say"><div class="avatar">🪖</div><div class="bubble reply" id="f-bubble"></div></div>
+    <div class="banner hidden" id="f-banner"></div>
+    <div class="upnext hidden" id="f-next"></div>
+    <button class="big" id="f-continue">Next run</button>
+    <details class="demo"><summary>How the sergeant decided</summary><div id="f-trace" style="display:block;text-align:left"></div></details>
+  </section>
+
+  <div class="error" id="error"></div>
+</main>
+
+<!-- PLAN DRAWER -->
+<div class="drawer hidden" id="drawer">
+  <div class="sheet">
+    <div style="display:flex;justify-content:space-between;align-items:center"><b>Your plan</b><button class="ghost" id="close-plan">Close</button></div>
+    <h2>The ladder</h2><div class="ladder" id="p-ladder"></div>
+    <h2>Next two weeks</h2><div id="p-upcoming"></div>
+    <h2>Runs so far</h2><div id="p-history"></div>
+    <h2>Talk to the sergeant</h2>
+    <form id="chat-form"><input id="chat-input" placeholder="Ask anything..." autocomplete="off"><button type="submit">Send</button></form>
+    <h2>Recruit</h2><button class="ghost" id="reset">Reset recruit</button>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const SCREENS = ['onboard', 'thinking', 'ready', 'running', 'reportA', 'reportB', 'feedback'];
+const EFFORT = ['', 'barely moving', 'very easy', 'easy', 'easy', 'target zone', 'target zone', 'getting hard', 'hard', 'very hard', 'all out'];
+let current = null, screen = 'onboard', report = {}, firstTime = false;
+
+function esc(s) { return String(s).replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+function md(text) {
+  const lines = esc(text).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').split('\n');
+  let out = '', inList = false;
+  for (const l of lines) {
+    const m = l.match(/^\s*[*-]\s+(.*)/);
+    if (m) { if (!inList) { out += '<ul>'; inList = true; } out += `<li>${m[1]}</li>`; }
+    else { if (inList) { out += '</ul>'; inList = false; } if (l.trim()) out += `<div>${l}</div>`; }
+  }
+  return out + (inList ? '</ul>' : '');
+}
+function parsePace(s) {
+  s = (s || '').trim();
+  if (!s) return 0;
+  if (s.includes(':')) { const [m, sec] = s.split(':').map(Number); return m + (sec || 0) / 60; }
+  return Number(s) || 0;
+}
+function go(name) {
+  screen = name;
+  SCREENS.forEach(s => $('s-' + s).classList.toggle('hidden', s !== name));
+  const inApp = !!current && name !== 'onboard';
+  $('topbar').classList.toggle('hidden', !inApp);
+  $('brand').classList.toggle('hidden', inApp);
+  $('error').textContent = '';
+  window.scrollTo(0, 0);
+}
+
+/* ---------- onboarding: one question per screen ---------- */
+const ans = { can: null };
+let obIndex = 0;
+const OB = {
+  can: { say: "Listen up, recruit! Before I do anything with you: can you run right now?" },
+  longest: { say: "Good. What's the longest run you did recently, and how fast? Don't lie.",
+    fields: [{ n: 'longest', l: 'Longest run (km)', t: 'number', step: '0.1', min: '1', max: '60', ph: 'e.g. 3' },
+             { n: 'pace', l: 'Pace (min:sec per km)', t: 'text', ph: 'e.g. 6:30' }] },
+  body1: { say: "Now the boring part. How old are you and what do you weigh?",
+    fields: [{ n: 'age', l: 'Age', t: 'number', min: '14', max: '100' }, { n: 'weight', l: 'Weight (kg)', t: 'number', step: '0.1', min: '30', max: '300' }] },
+  body2: { say: "Last one. Height and body fat. Estimate if you don't know.",
+    fields: [{ n: 'height', l: 'Height (cm)', t: 'number', min: '120', max: '230' }, { n: 'bf', l: 'Body fat (%)', t: 'number', step: '0.1', min: '3', max: '70' }] },
+};
+const obList = () => ['can', ...(ans.can === 'yes' ? ['longest'] : []), 'body1', 'body2'];
+
+function renderOb() {
+  const list = obList(), id = list[obIndex], step = OB[id];
+  let html = `<div class="say"><div class="avatar">🪖</div><div class="bubble">${step.say}</div></div>`;
+  if (id === 'can') {
+    html += `<button class="choice" data-can="no">I can't run at all</button><button class="choice" data-can="yes">I can run a bit</button>`;
+  } else {
+    html += `<form id="ob-form"><div class="row2">${step.fields.map(f =>
+      `<div class="field"><label>${f.l}</label><input name="${f.n}" type="${f.t}" ${f.step ? `step="${f.step}"` : ''} ${f.min ? `min="${f.min}"` : ''} ${f.max ? `max="${f.max}"` : ''}
+        ${f.ph ? `placeholder="${f.ph}"` : ''} value="${ans[f.n] ?? ''}" ${f.n === 'pace' ? '' : 'required'}></div>`).join('')}</div>
+      <div class="nav"><button type="button" class="ghost" id="ob-back">Back</button>
+      <button type="submit">${obIndex === list.length - 1 ? 'Report for duty' : 'Next'}</button></div></form>`;
+  }
+  $('ob-body').innerHTML = html;
+  $('ob-dots').innerHTML = list.map((_, i) => `<i class="${i <= obIndex ? 'on' : ''}"></i>`).join('');
+  const first = document.querySelector('#ob-body input'); if (first) first.focus();
+  document.querySelectorAll('[data-can]').forEach(b => b.onclick = () => { ans.can = b.dataset.can; obIndex++; renderOb(); });
+  const form = $('ob-form');
+  if (form) {
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      Object.assign(ans, Object.fromEntries(new FormData(form)));
+      if (obIndex === obList().length - 1) return submitIntake();
+      obIndex++; renderOb();
+    };
+    $('ob-back').onclick = () => { Object.assign(ans, Object.fromEntries(new FormData(form))); obIndex--; renderOb(); };
+  }
+}
+
+function submitIntake() {
+  const longest = ans.can === 'yes' ? Number(ans.longest) || 0 : 0;
+  const pace = ans.can === 'yes' ? parsePace(ans.pace) : 0;
+  const msg = `[Intake form submitted] Age: ${ans.age}. Weight: ${ans.weight} kg. Height: ${ans.height} cm. Body fat: ${ans.bf}%. ` +
+    `Longest recent run: ${longest} km at ${pace} min/km (0 means they cannot run). ` +
+    `Call save_profile with exactly these values (age=${ans.age}, weight_kg=${ans.weight}, height_cm=${ans.height}, ` +
+    `body_fat_pct=${ans.bf}, longest_run_km=${longest}, pace_min_per_km=${pace}).`;
+  firstTime = true;
+  call('/api/chat', { message: msg }, 'The sergeant is sizing you up...', 'onboard');
+}
+
+/* ---------- plan / bars ---------- */
+function blockLabel(b, total) {
+  if (b.label) return b.label;
+  if (b.minutes / total < 0.04) return '';          // too thin to hold text
+  return b.minutes < 1 ? Math.round(b.minutes * 60) + 's' : String(Math.round(b.minutes * 10) / 10);
+}
+function barsHtml(n) {
+  return n.blocks.map(b =>
+    `<div class="seg ${b.type}" style="flex:${b.minutes}" title="${b.type}: ${b.minutes} min">${blockLabel(b, n.total_minutes)}</div>`).join('');
+}
+
+function renderReady() {
+  const n = current.next;
+  $('r-when').textContent = `Next run · ${n.label.replace(', ', ' · ')}`;
+  $('r-what').textContent = n.summary;
+  $('r-bars').innerHTML = barsHtml(n);
+  $('r-total').textContent = `${n.total_minutes} min total`;
+  $('r-tip').innerHTML = n.kind === 'distance'
+    ? `Keep it at <b>${current.easy_pace}</b>. Never faster than <b>${current.pace_limit}</b>. You should be able to talk.`
+    : `${n.run_minutes} of those minutes are running. Keep it <b>slow enough to talk</b>. Slow is the whole point.`;
+  $('r-steps').innerHTML = n.steps.map(s => `<li>${esc(s)}</li>`).join('');
+  $('r-more').open = false;
+  $('where').textContent = n.label;
+}
+
+function renderPlanDrawer() {
+  const s = current;
+  const nextRung = s.ladder.find(r => !s.milestones.includes(r.name));
+  $('p-ladder').innerHTML = s.ladder.map(r => {
+    const cls = s.milestones.includes(r.name) ? 'done' : (nextRung && r.name === nextRung.name ? 'current' : '');
+    return `<div class="rung ${cls}"><b>${r.name.split(' ')[0]}</b>${cls === 'done' ? 'cleared' : cls === 'current' ? 'next up' : 'later'}</div>`;
+  }).join('');
+  const weeks = {};
+  s.upcoming.forEach(u => (weeks[u.week] ||= []).push(u));
+  $('p-upcoming').innerHTML = Object.entries(weeks).map(([w, us]) => `<div class="week"><h4>Week ${w}</h4>${us.map(u =>
+    `<div class="prow ${u.id === s.next.id ? 'now-row' : ''}"><span class="d">Day ${u.day}</span><span>${esc(u.summary)}</span></div>`).join('')}</div>`).join('');
+  $('p-history').innerHTML = s.history.length ? s.history.slice().reverse().map(h => {
+    const flags = (h.flags || []).filter(f => !f.startsWith('recruit_note')).map(f => `<span class="flag">${esc(f.split(':')[0].split(' (')[0])}</span>`).join('');
+    return `<div class="hist"><b>${h.label}</b>: ${h.skipped ? 'skipped' : `${h.completion_pct}% done, effort ${h.effort}/10`}${flags}</div>`;
+  }).join('') : '<div class="where">Nothing yet.</div>';
+}
+
+/* ---------- running: live guide ---------- */
+let runStart = 0, timer = null, lastIdx = -1;
+const NAMES = { warmup: 'Warm up', run: 'Run', walk: 'Walk', cooldown: 'Cool down' };
+const SUBS = { warmup: 'Brisk walk. Get warm.', run: 'Easy. You should be able to talk.', walk: 'Catch your breath.', cooldown: 'Easy walk, then stretch.' };
+function beep() {
+  try { const c = new (window.AudioContext || window.webkitAudioContext)(), o = c.createOscillator();
+    o.frequency.value = 880; o.connect(c.destination); o.start(); setTimeout(() => { o.stop(); c.close(); }, 200); } catch (e) {}
+}
+const mmss = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+function startRun() {
+  const n = current.next;
+  $('n-bars').innerHTML = barsHtml(n) + '<div class="marker" id="marker"></div>';
+  $('n-total').textContent = mmss(n.total_minutes * 60);
+  runStart = Date.now(); lastIdx = -1;
+  clearInterval(timer); timer = setInterval(tick, 250);
+  go('running'); tick();
+}
+function tick() {
+  const n = current.next, total = n.total_minutes * 60, el = (Date.now() - runStart) / 1000;
+  let acc = 0, idx = -1;
+  for (let i = 0; i < n.blocks.length; i++) { const end = acc + n.blocks[i].minutes * 60; if (el < end) { idx = i; break; } acc = end; }
+  const w = $('n-what');
+  if (idx === -1) {
+    w.className = 'what done'; w.textContent = 'Done'; $('n-count').textContent = '0:00'; $('n-sub').textContent = 'Tap the button below.';
+    if (lastIdx !== -2) { beep(); lastIdx = -2; }
+    clearInterval(timer);
+  } else {
+    const b = n.blocks[idx], left = acc + b.minutes * 60 - el;
+    w.className = 'what ' + b.type; w.textContent = NAMES[b.type]; $('n-count').textContent = mmss(left);
+    $('n-sub').textContent = (b.type === 'run' && n.kind === 'distance') ? `Steady at ${current.easy_pace}.` : SUBS[b.type];
+    if (idx !== lastIdx && lastIdx !== -1) beep();
+    lastIdx = idx;
+  }
+  $('marker').style.left = `calc(${Math.min(100, el / total * 100)}% - 1px)`;
+  $('n-elapsed').textContent = mmss(Math.min(el, total));
+}
+
+/* ---------- report: two quick questions ---------- */
+function startReport() {
+  clearInterval(timer);
+  const n = current.next;
+  report = { completed: 0, distance_km: 0, duration_min: 0, effort: 5, notes: '' };
+  const body = $('ra-body');
+  if (n.kind === 'intervals') {
+    $('ra-say').textContent = `How many of the ${n.reps} run intervals did you finish?`;
+    body.innerHTML = `<div class="numgrid">${Array.from({ length: n.reps + 1 }, (_, i) => `<button data-n="${i}">${i}</button>`).join('')}</div>`;
+    body.querySelectorAll('[data-n]').forEach(b => b.onclick = () => { report.completed = Number(b.dataset.n); goEffort(); });
+  } else if (n.kind === 'continuous_time') {
+    $('ra-say').textContent = `How many minutes did you run without stopping? (Planned: ${n.run_min})`;
+    body.innerHTML = `<div class="bignum" id="c-num">${n.run_min}</div><input type="range" id="c-range" min="0" max="${n.run_min}" value="${n.run_min}">
+      <button class="big" id="c-next" style="margin-top:14px">Next</button>`;
+    $('c-range').oninput = (e) => { $('c-num').textContent = e.target.value; };
+    $('c-next').onclick = () => { report.completed = Number($('c-range').value); goEffort(); };
+  } else {
+    $('ra-say').textContent = `How far did you go, and how long did it take? (Planned: ${n.km} km)`;
+    body.innerHTML = `<div class="row2"><div class="field"><label>Distance (km)</label><input id="d-km" type="number" step="0.01" min="0" value="${n.km}"></div>
+      <div class="field"><label>Time (minutes)</label><input id="d-min" type="number" step="0.1" min="0"></div></div>
+      <button class="big" id="d-next">Next</button>`;
+    $('d-next').onclick = () => {
+      const km = Number($('d-km').value), min = Number($('d-min').value);
+      if (!km || !min) { $('error').textContent = 'Give me the distance and the time.'; return; }
+      report.distance_km = km; report.duration_min = min; goEffort();
+    };
+  }
+  go('reportA');
+}
+function goEffort() { $('effort').value = 5; setEffort(5); $('notes').value = ''; $('notes').classList.add('hidden'); $('add-note').classList.remove('hidden'); go('reportB'); }
+function setEffort(v) { $('e-num').textContent = v; $('e-word').textContent = EFFORT[v]; }
+
+/* ---------- feedback ---------- */
+function showFeedback(data, kind) {
+  current = data.state;
+  const last = current.history[current.history.length - 1];
+  $('f-result').innerHTML = '';
+  if ((kind === 'run' || kind === 'sim' || kind === 'skip') && last) {
+    const bad = (last.flags || []).filter(f => !f.startsWith('recruit_note'));
+    const pills = last.skipped ? ['<span class="pill bad">skipped</span>']
+      : [`<span class="pill ${last.completion_pct >= 80 ? 'good' : 'bad'}">${last.completion_pct}% done</span>`,
+         `<span class="pill ${last.effort >= 7 ? 'bad' : 'good'}">effort ${last.effort}/10</span>`,
+         ...bad.filter(f => !f.startsWith('incomplete') && !f.startsWith('too_hard')).map(f => `<span class="pill bad">${esc(f.split(':')[0].split(' (')[0].replace('_', ' '))}</span>`)];
+    $('f-result').innerHTML = pills.join('');
+  }
+  $('f-bubble').innerHTML = md(data.reply);
+  const adj = data.trace.find(t => t.tool === 'adjust_plan' && t.args.mode && t.args.mode !== 'continue');
+  const labels = { advance: 'Moving you up a level.', repeat: 'Repeating this level.', step_back: 'Stepping you back a level.' };
+  $('f-banner').classList.toggle('hidden', !adj);
+  if (adj) $('f-banner').textContent = `Plan changed: ${labels[adj.args.mode] || adj.args.mode}`;
+  $('f-next').classList.add('hidden');
+  $('f-continue').textContent = firstTime ? 'Show me my first run' : (kind === 'chat' ? 'Back' : 'Next run');
+  $('f-trace').innerHTML = data.trace.length
+    ? data.trace.map(t => `<span class="chip">${t.tool}(${esc(Object.entries(t.args).map(([k, v]) => `${k}=${v}`).join(', ')).slice(0, 90)})</span>`).join('')
+    : '<span class="where">No tools needed.</span>';
+  firstTime = false;
+  go('feedback');
+}
+
+/* ---------- plumbing ---------- */
+async function call(path, body, msg, backTo, kind) {
+  $('think-msg').textContent = msg || 'The sergeant is thinking...';
+  go('thinking');
+  try {
+    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || r.statusText);
+    showFeedback(data, kind || (path === '/api/chat' ? 'chat' : 'run'));
+    return data;
+  } catch (e) {
+    go(backTo || 'ready');
+    $('error').textContent = 'The sergeant is off duty: ' + e.message;
+  }
+}
+
+$('start-run').onclick = startRun;
+$('finish-run').onclick = startReport;
+$('cancel-run').onclick = () => { clearInterval(timer); go('ready'); };
+$('skip-run').onclick = () => call('/api/skip', { notes: '' }, 'The sergeant noticed you did not show up...', 'ready', 'skip');
+$('effort').oninput = (e) => setEffort(Number(e.target.value));
+$('add-note').onclick = () => { $('notes').classList.remove('hidden'); $('add-note').classList.add('hidden'); $('notes').focus(); };
+$('send-report').onclick = () => {
+  report.effort = Number($('effort').value); report.notes = $('notes').value.trim();
+  call('/api/run', report, 'The sergeant is reading your run...', 'reportB', 'run');
+};
+$('f-continue').onclick = () => { renderReady(); go('ready'); };
+document.querySelectorAll('[data-sim]').forEach(b => b.onclick = () =>
+  call('/api/sim', { scenario: b.dataset.sim }, 'Faking your run, then the sergeant judges you...', 'ready', 'sim'));
+
+$('open-plan').onclick = () => { renderPlanDrawer(); $('drawer').classList.remove('hidden'); };
+$('close-plan').onclick = () => $('drawer').classList.add('hidden');
+$('drawer').onclick = (e) => { if (e.target === $('drawer')) $('drawer').classList.add('hidden'); };
+$('chat-form').onsubmit = (e) => {
+  e.preventDefault();
+  const msg = $('chat-input').value.trim();
+  if (!msg) return;
+  $('chat-input').value = ''; $('drawer').classList.add('hidden');
+  call('/api/chat', { message: msg }, 'The sergeant is listening...', 'ready', 'chat');
+};
+let resetArmed = null;
+$('reset').onclick = async () => {
+  // native confirm() is blocked in embedded browsers, so confirm with a second tap instead
+  if (!resetArmed) {
+    $('reset').textContent = 'Tap again to wipe this recruit';
+    resetArmed = setTimeout(() => { resetArmed = null; $('reset').textContent = 'Reset recruit'; }, 4000);
+    return;
+  }
+  clearTimeout(resetArmed); resetArmed = null; $('reset').textContent = 'Reset recruit';
+  try { await fetch('/api/reset', { method: 'POST' }); } catch (e) { $('error').textContent = 'Reset failed: ' + e.message; return; }
+  current = null; $('drawer').classList.add('hidden'); obIndex = 0; ans.can = null; clearInterval(timer);
+  go('onboard'); renderOb();
+};
+
+fetch('/api/state').then(r => r.json()).then(s => {
+  if (s.onboarded) { current = s; renderReady(); go('ready'); }
+  else { go('onboard'); renderOb(); }
+});
+</script>
+</body>
+</html>
