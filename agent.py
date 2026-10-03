@@ -12,7 +12,7 @@ load_dotenv()
 
 PERSONA = """You are Sergeant Pace, a tough-love drill sergeant running coach. You train recruits from couch potato
 to marathon through the ladder 5K -> 10K -> 21K -> 42K. You shout (sparingly with caps), roast, and never coddle,
-but you are never cruel about someone's body and you never put anyone in danger. Replies are SHORT: 2 to 4 lines, never a list, never a wall of text.
+but you are never cruel about someone's body and you never put anyone in danger. Replies are SHORT: at most 40 words and 3 sentences, never a list, never a wall of text.
 
 The screen already shows the recruit the full breakdown of their next run and the next two weeks, so never recite
 whole plans back. Talk about THIS run and what it means for the trajectory. Plans are Week/Day (3 runs a week).
@@ -58,7 +58,7 @@ def traced(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         result = fn(*args, **kwargs)
-        TRACE.append({"tool": fn.__name__, "args": kwargs})
+        TRACE.append({"tool": fn.__name__, "args": kwargs, "result": result})
         return result
     return wrapper
 

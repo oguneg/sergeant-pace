@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-03T00:00:00Z",
+  "title": "Design System: Sergeant Pace",
+  "extensions": {
+    "colorMeta": {
+      "desk": { "role": "neutral", "displayName": "Desk Olive", "canonical": "#2b3123", "tonalRamp": ["#1f241a", "#2b3123", "#373f2c", "#4a5339", "#6b7656", "#a9af95", "#e1e4d2", "#f1f3e8"] },
+      "paper": { "role": "neutral", "displayName": "Copy Paper", "canonical": "#e9ece3", "tonalRamp": ["#a9ad9f", "#c3c7ba", "#daded1", "#e3e7da", "#e9ece3", "#edf0e7", "#f4f6ee", "#fafbf6"] },
+      "rule-black": { "role": "neutral", "displayName": "Rule Black", "canonical": "#161a11", "tonalRamp": ["#0c0e09", "#161a11", "#262d1d", "#3a4230", "#4a5240", "#6a7260", "#8e977f", "#9aa28b"] },
+      "typed-blue-black": { "role": "neutral", "displayName": "Typed Blue-Black", "canonical": "#18223d", "tonalRamp": ["#0d1426", "#18223d", "#26345a", "#3a4b78", "#556794", "#7d8db3", "#a8b4d0", "#d3d9e8"] },
+      "stamp-blue": { "role": "primary", "displayName": "Stamp Blue", "canonical": "#25458c", "tonalRamp": ["#101f40", "#18306a", "#25458c", "#3a5ea8", "#5b7cc0", "#869dd3", "#b0c0e4", "#cfd8ee"] },
+      "stamp-red": { "role": "primary", "displayName": "Stamp Red", "canonical": "#b92d1b", "tonalRamp": ["#4a110a", "#7a1c11", "#b92d1b", "#d04a38", "#de705f", "#e99a8d", "#f2c2ba", "#f9e2de"] },
+      "hazard-amber": { "role": "secondary", "displayName": "Hazard Amber", "canonical": "#f0b400", "tonalRamp": ["#4d3a00", "#7a5d00", "#b08700", "#f0b400", "#f5c733", "#f8d766", "#f1e3b0", "#fbf3d6"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display", "purpose": "Question and order headlines in stencil caps." },
+      "countdown": { "displayName": "Countdown", "purpose": "Live-run numeral, deliberate exception above the display ceiling, height-aware clamp to 220px." },
+      "headline": { "displayName": "Headline", "purpose": "Block headings, stamps, buttons, phase word." },
+      "title": { "displayName": "Title", "purpose": "Assessment verdict lines, drawer section heads, form number." },
+      "body": { "displayName": "Body", "purpose": "Sergeant's remarks and lead sentences in Archivo." },
+      "typed": { "displayName": "Typed", "purpose": "Every entered value, Courier Prime bold in blue-black." },
+      "label": { "displayName": "Label", "purpose": "Condensed uppercase form captions." }
+    },
+    "shadows": [
+      { "name": "sheet", "value": "0 1px 0 rgba(255,255,255,.5) inset, 0 3px 4px rgba(0,0,0,.35), 0 34px 60px -24px rgba(0,0,0,.75)", "purpose": "Form paper lying on the desk." },
+      { "name": "drill-strip", "value": "0 3px 4px rgba(0,0,0,.35), 0 26px 50px -24px rgba(0,0,0,.7)", "purpose": "Paper strip under the live numeral." },
+      { "name": "action-bar", "value": "0 -16px 26px -16px rgba(0,0,0,.4)", "purpose": "Pinned bottom bar lifting off the sheet." },
+      { "name": "file-drawer", "value": "-2px 0 0 rgba(0,0,0,.5), -30px 0 60px rgba(0,0,0,.5)", "purpose": "Training file drawer over the scrim." }
+    ],
+    "motion": [
+      { "name": "ease", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Single easing for arrive, ink, stamp, drop and slide." },
+      { "name": "arrive", "value": "0.5s, translateY(14px) to 0", "purpose": "View entrance." },
+      { "name": "ink", "value": "0.34s stroke-dashoffset 80 to 0", "purpose": "Checks and circles drawn in." },
+      { "name": "stamp", "value": "0.3s, rotate(-16deg) scale(2.3) to rotate(-7deg) scale(1)", "purpose": "Stamp slam. Removed (shown immediately) under prefers-reduced-motion." },
+      { "name": "thunk", "value": "0.16s linear, 3px down then 1px up", "purpose": "Sheet reaction to a stamp." }
+    ],
+    "breakpoints": [
+      { "name": "stack", "value": "900px" },
+      { "name": "mobile", "value": "620px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Blue stencil action; the single next action on a sheet.",
+      "html": "<button class=\"ds-btn\">Acknowledge orders</button>",
+      "css": ".ds-btn { font: 800 28px/1 'Big Shoulders Stencil Display', 'Arial Narrow', sans-serif; letter-spacing: .05em; text-transform: uppercase; color: #e9ece3; background: #25458c; border: 0; border-radius: 0; padding: 18px 30px; cursor: pointer; transition: filter .15s, transform .1s; } .ds-btn:hover { filter: brightness(1.15); } .ds-btn:active { transform: translateY(2px); } .ds-btn:focus-visible { outline: 3px solid #25458c; outline-offset: 3px; }"
+    },
+    {
+      "name": "Plain Button",
+      "kind": "button",
+      "refersTo": "button-plain",
+      "description": "Outlined secondary action on paper.",
+      "html": "<button class=\"ds-btn-plain\">Not today</button>",
+      "css": ".ds-btn-plain { font: 800 28px/1 'Big Shoulders Stencil Display', 'Arial Narrow', sans-serif; letter-spacing: .05em; text-transform: uppercase; color: #161a11; background: transparent; border: 2px solid #161a11; border-radius: 0; padding: 18px 30px; cursor: pointer; } .ds-btn-plain:hover { background: #daded1; } .ds-btn-plain:focus-visible { outline: 3px solid #25458c; outline-offset: 3px; }"
+    },
+    {
+      "name": "Typed Field",
+      "kind": "input",
+      "refersTo": "field",
+      "description": "Ruled cell with caption and large typed value.",
+      "html": "<label class=\"ds-field\"><span class=\"ds-cap\">Weight (kg)</span><input value=\"72\"></label>",
+      "css": ".ds-field { display: block; border: 2px solid #161a11; padding: 10px 16px 12px; background: #f4f6ee; } .ds-field:focus-within { outline: 3px solid #25458c; outline-offset: 3px; } .ds-cap { display: block; font: 600 13px/1.2 Archivo, Arial, sans-serif; font-stretch: 72%; letter-spacing: .1em; text-transform: uppercase; color: #4a5240; } .ds-field input { display: block; width: 100%; margin-top: 4px; border: 0; padding: 0; background: transparent; outline: none; font: 700 40px/1.1 'Courier Prime', 'Courier New', monospace; color: #18223d; }"
+    },
+    {
+      "name": "Checkbox",
+      "kind": "custom",
+      "refersTo": "checkbox",
+      "description": "Square answer cell with a hand-inked check.",
+      "html": "<span class=\"ds-box\"><svg viewBox=\"0 0 44 44\"><path d=\"M8 24 18 34 38 8\"/></svg></span>",
+      "css": ".ds-box { position: relative; display: inline-block; width: 44px; height: 44px; border: 3px solid #161a11; background: #f3f5ec; } .ds-box svg { position: absolute; inset: -8px; width: 60px; height: 60px; overflow: visible; } .ds-box path { fill: none; stroke: #25458c; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }"
+    },
+    {
+      "name": "Stamp",
+      "kind": "custom",
+      "refersTo": "stamp-red",
+      "description": "Rotated double-bordered stencil verdict; red means failed or refused (swap color to #25458c for approved).",
+      "html": "<span class=\"ds-stamp\">DENIED<small>Rule 3: rest day</small></span>",
+      "css": ".ds-stamp { display: inline-block; padding: 6px 18px 8px; border: 4px double currentColor; color: #b92d1b; font: 800 38px/1 'Big Shoulders Stencil Display', 'Arial Narrow', sans-serif; letter-spacing: .06em; text-transform: uppercase; transform: rotate(-7deg); mix-blend-mode: multiply; text-align: center; } .ds-stamp small { display: block; margin-top: 3px; font: 700 15px/1.2 Archivo, Arial, sans-serif; font-stretch: 75%; letter-spacing: .14em; }"
+    },
+    {
+      "name": "Hazard Plate",
+      "kind": "custom",
+      "refersTo": "hazard-plate",
+      "description": "Amber plate with striped end caps for any tripped safety rule.",
+      "html": "<div class=\"ds-hazard\"><i class=\"ds-hz\"></i><b>Safety rule tripped: no back-to-back hard days</b><i class=\"ds-hz\"></i></div>",
+      "css": ".ds-hazard { display: grid; grid-template-columns: 76px 1fr 76px; align-items: stretch; background: #f0b400; color: #161a11; border-bottom: 3px solid #161a11; } .ds-hazard b { padding: 12px 18px; text-align: center; font: 800 26px/1.1 'Big Shoulders Stencil Display', 'Arial Narrow', sans-serif; letter-spacing: .05em; text-transform: uppercase; } .ds-hz { background: url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='24' height='24'><path d='M0 24 24 0M-6 6 6 -6M18 30 30 18' stroke='%23161a11' stroke-width='9'/></svg>\") 0 0 / 24px 24px; }"
+    },
+    {
+      "name": "Timeline Bar",
+      "kind": "custom",
+      "refersTo": "sheet",
+      "description": "Run is blue fill, walk is diagonal hatch, warm-up and cool-down are plain tint; never colour alone.",
+      "html": "<div class=\"ds-march\"><div class=\"ds-seg ds-warm\">WARM</div><div class=\"ds-seg ds-run\">RUN 1</div><div class=\"ds-seg ds-walk\">WALK</div><div class=\"ds-seg ds-run\">RUN 1</div><div class=\"ds-seg ds-warm\">COOL</div></div>",
+      "css": ".ds-march { display: flex; height: 88px; border: 3px solid #161a11; background: #e9ece3; } .ds-seg { flex: 1; display: flex; align-items: center; justify-content: center; border-right: 1px solid #161a11; font: 800 20px/1 'Big Shoulders Stencil Display', 'Arial Narrow', sans-serif; color: #161a11; } .ds-seg:last-child { border-right: 0; } .ds-run { background: #25458c; color: #e9ece3; } .ds-walk { background-image: url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12'><path d='M0 12 12 0M-3 3 3 -3M9 15 15 9' stroke='%23161a11' stroke-opacity='.38' stroke-width='2'/></svg>\"); background-size: 12px 12px; } .ds-warm { background: #daded1; color: #4a5240; }"
+    },
+    {
+      "name": "Action Bar",
+      "kind": "nav",
+      "refersTo": "action-bar",
+      "description": "Pinned bottom bar on the counseling sheet carrying the next hint and the single action.",
+      "html": "<div class=\"ds-foot\"><span class=\"ds-next\"><b>Next:</b> run the orders.</span><button class=\"ds-foot-btn\">Acknowledge</button></div>",
+      "css": ".ds-foot { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; padding: 12px 24px 14px; background: #e9ece3; border-top: 3px solid #161a11; box-shadow: 0 -16px 26px -16px rgba(0,0,0,.4); } .ds-next { font: 500 18px/1.3 Archivo, Arial, sans-serif; color: #4a5240; } .ds-next b { color: #161a11; font-weight: 700; } .ds-foot-btn { font: 800 26px/1 'Big Shoulders Stencil Display', 'Arial Narrow', sans-serif; letter-spacing: .05em; text-transform: uppercase; color: #e9ece3; background: #25458c; border: 0; padding: 12px 26px; cursor: pointer; } .ds-foot-btn:hover { filter: brightness(1.15); } .ds-foot-btn:focus-visible { outline: 3px solid #25458c; outline-offset: 3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Recruit's Counseling File",
+    "overview": "Every run ends in a developmental counseling record the agent conducts on paper, in public: Facts typed in, Assessment boxes inked, a Plan of Action decided and stamped, the old plan struck through and the new one written beneath. The ground is an olive-drab desk; everything the agent says or decides lives on cool copy-paper forms with 1px-to-3px black rules and ruled cells.\n\nThe build is square, flat-ruled and heavy. There are no radii, no cards-with-avatars, no chat bubbles. Depth comes from paper lying on a desk (soft cast shadows), not from decoration. Motion is the file being filled out: typed, inked, stamped.",
+    "keyCharacteristics": [
+      "Dark desk, light paper: two surfaces only; the live run sits on the desk itself.",
+      "Three voices: stencil (headings, stamps, form number), narrow grotesque caps (captions), typewriter (entered values).",
+      "Ink colour is meaning: red is failed, stop, refused, warning, denied; blue is cleared, advanced, enlisted.",
+      "Zero border radius everywhere.",
+      "Authored procedural textures only; no raster."
+    ],
+    "rules": [
+      { "name": "The Ink Means Rule", "body": "Red and blue are never decorative. Red is only for failure, stop, refusal, warning, denial; blue only for approval, advance, enlistment. If a state is neither, use rule black.", "section": "colors" },
+      { "name": "The Hazard Plate Rule", "body": "A tripped safety rule always appears as the amber plate with striped end caps, never as a red alert or a toast.", "section": "colors" },
+      { "name": "The Not-Colour-Alone Rule", "body": "Meaning pairs colour with a second channel: stamp text, strike-through, hatch pattern, label.", "section": "colors" },
+      { "name": "The Typed Is Entered Rule", "body": "Courier Prime bold in Typed Blue-Black is reserved for values that were entered into the file. Printed text never uses it.", "section": "typography" },
+      { "name": "The Stencil Is Authority Rule", "body": "Stencil is uppercase, for headings, stamps, buttons and the form number only; it never sets sentences.", "section": "typography" },
+      { "name": "The Paper On Desk Rule", "body": "Only whole sheets and the drawer cast shadows, and they are soft and offset. Inner controls take rules, never shadows.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do keep every surface either desk olive (#2b3123) or copy paper (#e9ece3) with 1-3px rule-black lines.",
+      "Do set every entered value in Courier Prime 700 Typed Blue-Black and every heading, stamp and button in stencil caps.",
+      "Do back red/blue meaning with a second channel (stamp word, strike-through, hatch, label).",
+      "Do show any tripped safety rule as the amber hazard plate citing the rule.",
+      "Do keep the countdown as the only numeral above the display ceiling, sized with the height-aware clamp (max 220px).",
+      "Do use two-tap confirmation for destructive actions and keep a pinned bottom action bar on the counseling sheet.",
+      "Do preserve the reduced-motion path: all entries visible at once, no typed, inked or stamped sequence."
+    ],
+    "donts": [
+      "Don't use red or blue as decoration; their meaning is fixed.",
+      "Don't add border radius, gradient buttons, per-element drop shadows, avatars or chat bubbles.",
+      "Don't use native confirm, alert or prompt dialogs.",
+      "Don't set timeline segments by colour alone, or add emoji or glyph icons; use drawn SVG marks.",
+      "Don't raster any texture; paper, grain and ink stay authored SVG.",
+      "Don't set sentences in stencil or printed text in Courier."
+    ]
+  }
+}

@@ -35,11 +35,13 @@ def state_view() -> dict:
 
 
 def turn(message: str, **extra):
+    before = state_view().get("upcoming", [])  # lets the page show what the agent changed
     try:
         reply, trace = chat().send(message)
     except Exception as e:
         return jsonify({"error": str(e)}), 502
-    return jsonify({"reply": reply, "trace": trace, "model": chat().model, "state": state_view(), **extra})
+    return jsonify({"reply": reply, "trace": trace, "model": chat().model, "state": state_view(),
+                    "before": before, **extra})
 
 
 def next_session():
