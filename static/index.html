@@ -7,7 +7,7 @@
 <meta name="description" content="A tough-love running coach agent that re-plans your training after every single run.">
 <link rel="preload" href="/static/fonts/bigshoulders-stencil-var.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/static/fonts/courier-prime-700.woff2" as="font" type="font/woff2" crossorigin>
-<link rel="stylesheet" href="/static/app.css?v=4">
+<link rel="stylesheet" href="/static/app.css?v=6">
 </head>
 <body>
 
@@ -33,14 +33,16 @@
 <header class="bar" id="bar">
   <div class="brand"><svg aria-hidden="true"><use href="#insignia"/></svg><b>Sergeant Pace</b></div>
   <div class="fileline" id="fileline"></div>
+  <button class="tab" id="voice-toggle" aria-pressed="true">Voice on</button>
   <button class="tab" id="open-file" hidden>Training file</button>
 </header>
 
 <main id="stage" tabindex="-1"><noscript>Sergeant Pace needs JavaScript. Fall in.</noscript></main>
 
+<div class="toast" id="toast" role="status" hidden></div>
 <div class="scrim" id="scrim" hidden></div>
 <aside class="file" id="file" aria-label="Training file" hidden></aside>
 
-<script src="/static/app.js?v=4" defer></script>
+<script src="/static/app.js?v=6" defer></script>
 </body>
 </html>

@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Voice audition · Sergeant Pace</title>
+<link rel="stylesheet" href="/static/app.css?v=6">
+<style>
+  .lineblock { display: grid; grid-template-columns: 1.4fr 1fr; gap: 28px; margin-bottom: clamp(24px, 3vw, 40px); }
+  .lineblock textarea { width: 100%; min-height: 128px; padding: 12px 14px; border: 2px solid var(--rule); background: #f4f6ee; font: 700 22px/1.35 var(--type); color: var(--typed); resize: vertical; outline: none; }
+  .lineblock textarea:focus { outline: 3px solid var(--blue); outline-offset: 3px; }
+  .styles { display: grid; gap: 10px; }
+  .style { display: flex; align-items: center; gap: 14px; padding: 12px 16px; background: transparent; border: 2px solid var(--rule); color: var(--rule); font: 800 24px/1 var(--stencil); letter-spacing: 0.04em; text-transform: uppercase; text-align: left; cursor: pointer; }
+  .style:hover { background: var(--paper-shade); }
+  .style .box { width: 30px; height: 30px; border-width: 2px; }
+  .issued { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 22px; padding: 12px 16px; border: 2px solid var(--rule); background: #f4f6ee; }
+  .issued .typed { font-size: 22px; }
+  .group { margin: 0 0 6px; font: 800 clamp(24px, 2.4vw, 32px)/1 var(--stencil); letter-spacing: 0.05em; text-transform: uppercase; }
+  .group + .rows { margin-bottom: 30px; }
+  .rows { border: 2px solid var(--rule); }
+  .vrow { display: grid; grid-template-columns: 64px 1fr 1fr 170px; gap: 16px; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--rule); }
+  .vrow:last-child { border-bottom: 0; }
+  .vrow.cur { background: var(--paper-shade); }
+  .vrow .name { font: 800 clamp(26px, 2.6vw, 34px)/1 var(--stencil); letter-spacing: 0.03em; text-transform: uppercase; }
+  .vrow .tone { font: 600 15px/1.2 var(--form); font-stretch: 75%; letter-spacing: 0.1em; text-transform: uppercase; color: var(--caption); }
+  .vrow .state { display: block; margin-top: 3px; font: 700 17px/1.4 var(--type); color: var(--typed); min-height: 1.4em; }
+  .play { width: 56px; height: 56px; display: grid; place-items: center; padding: 0; background: var(--blue); color: var(--paper); border: 0; cursor: pointer; }
+  .play:hover { filter: brightness(1.15); }
+  .play svg { width: 26px; height: 26px; fill: currentColor; }
+  .play .stop { display: none; } .play.on .go { display: none; } .play.on .stop { display: block; }
+  .play.busy { opacity: 0.55; cursor: progress; }
+  .issue { padding: 12px 14px; font-size: 20px; }
+  .vrow .stamp { opacity: 0.95; transform: rotate(-4deg); font-size: 22px; padding: 4px 12px 6px; }
+  .note { max-width: 68ch; margin: 0; font: 500 16px/1.5 var(--form); color: var(--caption); }
+  @media (max-width: 760px) {
+    .lineblock { grid-template-columns: 1fr; }
+    .vrow { grid-template-columns: 56px 1fr; } .vrow .tone-cell { grid-column: 2; } .vrow .act { grid-column: 1 / -1; }
+  }
+</style>
+</head>
+<body>
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="insignia" viewBox="0 0 48 48">
+      <path fill="currentColor" d="M5 18 24 6l19 12v6.5L24 12.5 5 24.5Z"/><path fill="currentColor" d="M5 27 24 15l19 12v6.5L24 21.5 5 33.5Z"/><path fill="currentColor" d="M5 36 24 24l19 12v6.5L24 30.5 5 42.5Z"/>
+    </symbol>
+    <filter id="ink" x="-6%" y="-10%" width="112%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="edge"/>
+      <feDisplacementMap in="SourceGraphic" in2="edge" scale="2.4" result="rough"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.05 0.7" numOctaves="2" seed="9" result="press"/>
+      <feColorMatrix in="press" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.7 2.0" result="mask"/>
+      <feComposite in="rough" in2="mask" operator="in"/>
+    </filter>
+  </defs>
+</svg>
+
+<header class="bar">
+  <div class="brand"><svg aria-hidden="true"><use href="#insignia"/></svg><b>Sergeant Pace</b></div>
+  <a class="tab" href="/" style="margin-left:auto;text-decoration:none">Back to training</a>
+</header>
+
+<main>
+  <section class="sheet">
+    <div class="fh"><svg aria-hidden="true"><use href="#insignia"/></svg>
+      <div><h2>Voice audition</h2><p>Hear the sergeant in every voice, then issue one</p></div><div class="formno">SP-6</div></div>
+    <div class="body">
+      <div class="issued"><span class="cap">Issued voice</span><span class="typed" id="issued">...</span></div>
+      <div class="lineblock">
+        <label><span class="cap">The line the sergeant barks</span>
+          <textarea id="line">Are you trying to retire early?! Effort nine is not training. Slow down, recruit!</textarea></label>
+        <div><span class="cap" style="margin-bottom:8px">Delivery</span><div class="styles" id="styles" role="radiogroup" aria-label="Delivery style"></div></div>
+      </div>
+      <h3 class="group">Worth hearing first</h3><div class="rows" id="likely"></div>
+      <h3 class="group">The rest of the roster</h3><div class="rows" id="rest"></div>
+      <p class="note">Tone labels are Google's descriptions of each prebuilt voice. Each first play asks the model to generate the line, which takes a few seconds and uses TTS quota. After that it is cached.</p>
+    </div>
+  </section>
+</main>
+<div class="toast" id="toast" role="status" hidden></div>
+
+<script>
+(() => {
+'use strict';
+const $ = (s) => document.querySelector(s);
+const xmark = '<svg viewBox="0 0 44 44" aria-hidden="true"><path d="M9 10 36 35"/><path d="M35 9 10 36"/></svg>';
+let data = null, style = 'raspy', audio = null, playingName = null;
+
+const toast = (msg) => { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => (t.hidden = true), 4500); };
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function stopAudio() {
+  if (audio) { audio.pause(); audio = null; }
+  document.querySelectorAll('.play.on').forEach((b) => b.classList.remove('on'));
+  playingName = null;
+}
+
+function rowHtml(v) {
+  const cur = data.current.voice === v.name;
+  return `<div class="vrow ${cur ? 'cur' : ''}" data-name="${v.name}">
+    <button class="play" aria-label="Play ${v.name}"><svg class="go" viewBox="0 0 24 24"><path d="M7 4v16l13-8z"/></svg><svg class="stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12"/></svg></button>
+    <div><span class="name">${v.name}</span><span class="state"></span></div>
+    <div class="tone-cell"><span class="tone">${esc(v.tone)}</span></div>
+    <div class="act">${cur ? `<span class="stamp blue hit">Issued</span>` : `<button class="btn plain issue">Issue this voice</button>`}</div></div>`;
+}
+
+function render() {
+  const cur = data.current, styleLabel = data.styles.find((s) => s.id === cur.style).label;
+  $('#issued').textContent = `${cur.voice}, ${styleLabel}`;
+  $('#styles').innerHTML = data.styles.map((s) => `<button class="style" role="radio" aria-checked="${s.id === style}" data-id="${s.id}"><span class="box blue ${s.id === style ? 'on static-on' : ''}">${xmark}</span>${esc(s.label)}</button>`).join('');
+  $('#likely').innerHTML = data.voices.filter((v) => v.likely).map(rowHtml).join('');
+  $('#rest').innerHTML = data.voices.filter((v) => !v.likely).map(rowHtml).join('');
+}
+
+async function play(row) {
+  const name = row.dataset.name, btn = $('.play', row), state = $('.state', row);
+  if (playingName === name) { stopAudio(); state.textContent = 'Stopped'; return; }
+  stopAudio(); btn.classList.add('busy'); state.textContent = 'Generating...';
+  document.querySelectorAll('.vrow .state').forEach((s) => { if (s !== state && s.textContent === 'Playing') s.textContent = 'Heard'; });
+  try {
+    const r = await fetch('/api/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: $('#line').value.trim() || 'Fall in, recruit.', voice: name, style }) });
+    if (!r.ok) throw new Error((await r.json()).error || r.statusText);
+    const a = new Audio(URL.createObjectURL(await r.blob()));
+    audio = a; playingName = name; btn.classList.remove('busy'); btn.classList.add('on'); state.textContent = 'Playing';
+    a.addEventListener('ended', () => { if (audio === a) stopAudio(); state.textContent = 'Heard'; });
+    await a.play();
+  } catch (e) {
+    btn.classList.remove('busy'); stopAudio(); state.textContent = 'Failed';
+    toast(String(e.message).includes('RESOURCE_EXHAUSTED') ? 'TTS quota used up for now.' : 'Could not generate: ' + e.message.slice(0, 90));
+  }
+}
+
+async function issue(row) {
+  const name = row.dataset.name;
+  const r = await fetch('/api/voice', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: name, style }) });
+  if (!r.ok) return toast('Could not issue that voice.');
+  data.current = await r.json(); render(); toast(`Issued: ${name}`);
+}
+
+document.addEventListener('click', (e) => {
+  const row = e.target.closest('.vrow');
+  if (e.target.closest('.play') && row) return play(row);
+  if (e.target.closest('.issue') && row) return issue(row);
+  const st = e.target.closest('.style');
+  if (st) { style = st.dataset.id; stopAudio(); render(); }
+});
+
+fetch('/api/voices').then((r) => r.json()).then((d) => { data = d; style = d.current.style; render(); });
+})();
+</script>
+</body>
+</html>

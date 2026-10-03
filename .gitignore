@@ -7,3 +7,5 @@ __pycache__/
 .impeccable/review/
 .impeccable/hook.cache.json
 .impeccable/config.local.json
+tts_cache/
+voice_choice.json

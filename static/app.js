@@ -40,8 +40,93 @@ const xmark = '<svg viewBox="0 0 44 44" aria-hidden="true"><path d="M9 10 36 35"
 const box = (tone = 'blue', on = false) => `<span class="box ${tone}${on ? ' on static-on' : ''}">${xmark}</span>`;
 const circleSvg = '<svg viewBox="0 0 104 52" preserveAspectRatio="none" aria-hidden="true"><path d="M10 24C6 8 40 3 70 7c30 5 31 33 2 38C42 51 8 47 10 24Z"/></svg>';
 
+/* ---------- voice: the sergeant speaks, the recruit can talk back ---------- */
+let voiceOn = true;
+try { voiceOn = localStorage.getItem('sp-voice') !== 'off'; } catch (e) { /* no storage */ }
+let currentAudio = null;
+const MIC = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
+
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toast.t); toast.t = setTimeout(() => { t.hidden = true; }, 5000);
+}
+function stopVoice() { if (currentAudio) { currentAudio.pause(); currentAudio = null; } }
+function setVoiceButton() {
+  const b = $('#voice-toggle'); b.textContent = voiceOn ? 'Voice on' : 'Voice off'; b.setAttribute('aria-pressed', String(voiceOn));
+}
+$('#voice-toggle').addEventListener('click', () => {
+  voiceOn = !voiceOn; setVoiceButton(); if (!voiceOn) stopVoice();
+  try { localStorage.setItem('sp-voice', voiceOn ? 'on' : 'off'); } catch (e) { /* no storage */ }
+});
+setVoiceButton();
+
+/** Start fetching the spoken version of the remarks; resolves to a ready clip, or null if speech is unavailable. */
+function fetchSpeech(text) {
+  const h = { ready: false, promise: null };
+  h.promise = fetch('/api/speak', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })
+    .then((r) => { if (!r.ok) throw new Error('no speech'); return r.blob(); })
+    .then((blob) => new Promise((res) => {
+      const audio = new Audio(URL.createObjectURL(blob));
+      audio.addEventListener('loadedmetadata', () => res({ audio, duration: audio.duration || 0 }), { once: true });
+      audio.addEventListener('error', () => res(null), { once: true });
+    }))
+    .catch(() => null)
+    .then((clip) => { h.ready = true; return clip; });
+  return h;
+}
+async function clipFor(spec) {
+  const h = spec.speech; if (!h) return null;
+  if (fast && !h.ready) return null;
+  const clip = await Promise.race([h.promise, new Promise((r) => setTimeout(() => r(null), 9000))]);
+  return clip && clip.duration > 0 ? clip : null;
+}
+function playClip(clip) { stopVoice(); currentAudio = clip.audio; clip.audio.play().catch(() => {}); }
+
+async function toWav(buf) {
+  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const decoded = await ctx.decodeAudioData(buf); ctx.close();
+  const rate = 16000, off = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * rate)), rate);
+  const src = off.createBufferSource(); src.buffer = decoded; src.connect(off.destination); src.start();
+  const pcm = (await off.startRendering()).getChannelData(0);
+  const out = new DataView(new ArrayBuffer(44 + pcm.length * 2)), w = (o, t) => [...t].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
+  w(0, 'RIFF'); out.setUint32(4, 36 + pcm.length * 2, true); w(8, 'WAVE'); w(12, 'fmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true);
+  out.setUint16(22, 1, true); out.setUint32(24, rate, true); out.setUint32(28, rate * 2, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true);
+  w(36, 'data'); out.setUint32(40, pcm.length * 2, true);
+  for (let i = 0; i < pcm.length; i++) out.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 0x7fff, true);
+  return new Blob([out], { type: 'audio/wav' });
+}
+async function recordWav() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const rec = new MediaRecorder(stream), chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  rec.start();
+  return { stop: () => new Promise((res, rej) => {
+    rec.onstop = async () => { stream.getTracks().forEach((t) => t.stop()); try { res(await toWav(await new Blob(chunks).arrayBuffer())); } catch (e) { rej(e); } };
+    rec.stop();
+  }) };
+}
+/** Turn a button into tap-to-talk, tap-again-to-send. onText gets the transcript. */
+function voiceInput(btn, onText) {
+  const idle = btn.innerHTML; let session = null;
+  btn.addEventListener('click', async () => {
+    if (session) {
+      const s = session; session = null; btn.classList.remove('rec'); btn.disabled = true; btn.textContent = 'Listening...';
+      try {
+        const wav = await s.stop();
+        const r = await fetch('/api/transcribe', { method: 'POST', headers: { 'Content-Type': 'audio/wav' }, body: wav });
+        const d = await r.json(); if (!r.ok) throw new Error(d.error || 'transcription failed');
+        if (d.text) onText(d.text); else toast('Heard nothing. Say it again.');
+      } catch (e) { toast('Voice failed: ' + e.message); }
+      btn.disabled = false; btn.innerHTML = idle;
+      return;
+    }
+    try { stopVoice(); session = await recordWav(); btn.classList.add('rec'); btn.textContent = 'Tap to send'; }
+    catch (e) { toast('Microphone blocked. Allow it and try again.'); }
+  });
+}
+
 function mount(html, cls = 'view') {
-  clearInterval(S.timer);
+  clearInterval(S.timer); stopVoice();
   const n = document.createElement('div');
   n.className = cls; n.innerHTML = html;
   stage.replaceChildren(n);
@@ -258,6 +343,7 @@ function viewStatementB() {
     <div class="scale" role="group" aria-label="Effort, 1 to 10">${Array.from({ length: 10 }, (_, i) => `<button data-e="${i + 1}" aria-label="${i + 1}, ${EFFORT[i + 1]}">${i + 1}<span class="circle red">${circleSvg}</span></button>`).join('')}</div>
     <div class="scale-words cap"><span>Barely moving</span><span>All out</span></div><p class="word" id="word"></p>
     <label style="display:block;margin-top:22px"><span class="cap">Remarks for the sergeant (pain, tiredness, excuses)</span><textarea class="ruled" id="notes" rows="2" placeholder="Optional"></textarea></label>
+    <button type="button" class="link mic" id="speak-notes">${MIC}Speak your remarks</button>
     <div class="actions"><button class="btn" id="file">File report</button><button class="link" id="again">Back</button></div></div></section>`);
   const pick = (e) => {
     S.report.effort = e;
@@ -266,6 +352,7 @@ function viewStatementB() {
   };
   v.querySelectorAll('.scale button').forEach((b) => b.addEventListener('click', () => pick(+b.dataset.e)));
   pick(5);
+  voiceInput($('#speak-notes', v), (text) => { const n = $('#notes', v); n.value = (n.value ? n.value + ' ' : '') + text; });
   $('#again', v).addEventListener('click', viewStatementA);
   $('#file', v).addEventListener('click', () => {
     S.report.notes = $('#notes', v).value.trim();
@@ -428,7 +515,10 @@ async function playCounsel(v, kind, spec) {
   }
   // remarks, in the sergeant's voice, then the signature
   const rem = $('#rem', v); rem.replaceChildren(); const p = document.createElement('span'); rem.append(p);
-  await typeInto(p, spec.remarks, 140);
+  let cps = 140;
+  const clip = await clipFor(spec);
+  if (clip) { cps = Math.max(14, Math.min(45, spec.remarks.length / clip.duration)); playClip(clip); }
+  await typeInto(p, spec.remarks, cps);
   await typeInto($('#sig', v), 'Sgt Pace', 12);
   await sleep(260);
 
@@ -439,8 +529,10 @@ async function playCounsel(v, kind, spec) {
   }
   const foot = $('#foot', v); foot.hidden = false;
   const n = spec.next;
-  foot.innerHTML = `<div class="next">${kind === 'chat' ? '' : `Next orders: <b>${esc(n.label)}</b>, ${esc(n.summary)}`}</div><button class="btn" id="proceed">${esc(spec.nextLabel)}</button>`;
+  foot.innerHTML = `<div class="next">${kind === 'chat' ? '' : `Next orders: <b>${esc(n.label)}</b>, ${esc(n.summary)}`}</div>
+    <div class="foot-actions"><button class="btn plain mic" id="talk">${MIC}Talk back</button><button class="btn" id="proceed">${esc(spec.nextLabel)}</button></div>`;
   $('#proceed', v).addEventListener('click', viewOrders); $('#proceed', v).focus({ preventScroll: true });
+  voiceInput($('#talk', v), (text) => ask('/api/chat', { message: text }, 'chat', { said: text }));
   if (kind !== 'chat') $('.fh p', v).textContent = 'Decision filed';
   playing = false; sheet.removeEventListener('click', onClick); renderBar();
 }
@@ -454,7 +546,9 @@ async function ask(path, body, kind, ctx = {}) {
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || r.statusText);
     S.current = data.state;
-    await playCounsel(v, kind === 'intake' ? 'intake' : kind, buildSpec(kind, data, ctx));
+    const spec = buildSpec(kind, data, ctx);
+    spec.speech = voiceOn ? fetchSpeech(data.reply) : null;  // fetched while the sheet fills in
+    await playCounsel(v, kind === 'intake' ? 'intake' : kind, spec);
   } catch (e) {
     playing = false; clearInterval(S.wait);
     mount(`<section class="sheet">${header('Clerical error', 'The sergeant is off duty', 'SP-0')}<div class="fail"><h1 class="q">Report not filed.</h1>
@@ -479,12 +573,13 @@ function openFile() {
       `<tr><td class="wk">W${w}</td>${[1, 2, 3].map((k) => `<td class="${d[k] && d[k].id === c.next.id ? 'now' : ''}">${d[k] ? esc(d[k].summary) : ''}</td>`).join('')}</tr>`).join('')}</table></section>
     <section><h3>Service record</h3>${hist.length ? hist.map((h) => `<div class="svc"><b>${esc(h.label)}</b><div class="typed">${h.skipped ? 'Skipped' : `${h.completion_pct}% done · effort ${h.effort}/10`}</div>
       ${(h.flags || []).filter((f) => !f.startsWith('recruit_note')).map((f) => `<div class="typed bad">${esc(flagParts(f).title)}</div>`).join('')}</div>`).join('') : '<p class="typed">No runs on file.</p>'}</section>
-    <section><h3>Request an audience</h3><form class="ask" id="ask"><input id="ask-in" placeholder="Ask the sergeant anything" autocomplete="off"><button class="btn" type="submit">Send</button></form></section>
-    <footer><button class="link" id="reset">Reset recruit</button></footer>`;
+    <section><h3>Request an audience</h3><form class="ask" id="ask"><input id="ask-in" placeholder="Ask the sergeant anything" autocomplete="off"><button class="btn plain mic" type="button" id="ask-mic" aria-label="Speak">${MIC}</button><button class="btn" type="submit">Send</button></form></section>
+    <footer><a class="link" href="/voices">Choose the sergeant's voice</a><br><button class="link" id="reset">Reset recruit</button></footer>`;
   el.hidden = false; $('#scrim').hidden = false;
   $('#close-file').focus();
   $('#close-file').addEventListener('click', closeFile);
   $('#ask').addEventListener('submit', (e) => { e.preventDefault(); const m = $('#ask-in').value.trim(); if (!m) return; closeFile(); ask('/api/chat', { message: m }, 'chat'); });
+  voiceInput($('#ask-mic'), (text) => { closeFile(); ask('/api/chat', { message: text }, 'chat', { said: text }); });
   let armed = null;
   $('#reset').addEventListener('click', async (e) => {
     const b = e.currentTarget;

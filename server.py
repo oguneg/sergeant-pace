@@ -1,8 +1,9 @@
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, Response, jsonify, request, send_from_directory
 
 import agent
 import sim
 import tools
+import voice
 
 app = Flask(__name__, static_folder="static")
 _chat = None  # single shared conversation: one recruit per demo
@@ -100,6 +101,52 @@ def post_sim():
     form = sim.sim_form(state, request.json.get("scenario"))
     text = sim.report_message(s, form) if form else sim.skip_message(s, "felt lazy")
     return turn(text, sent=text)
+
+
+@app.get("/voices")
+def voices_page():
+    return send_from_directory("static", "voices.html")
+
+
+@app.get("/api/voices")
+def get_voices():
+    return jsonify({"voices": [{"name": n, "tone": t, "likely": l} for n, t, l in voice.VOICES],
+                    "styles": [{"id": k, "label": v[0]} for k, v in voice.STYLES.items()], "current": voice.current()})
+
+
+@app.post("/api/voice")
+def post_voice():
+    body = request.json or {}
+    try:
+        return jsonify(voice.choose(body.get("voice", ""), body.get("style", "")))
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@app.post("/api/speak")
+def post_speak():
+    body = request.json or {}
+    text = str(body.get("text", "")).strip()[:700]
+    if not text:
+        return jsonify({"error": "nothing to say"}), 400
+    try:
+        # voice and style are optional: the voice page auditions others, the app uses the issued one
+        return Response(voice.speak(text, body.get("voice"), body.get("style")), mimetype="audio/wav")
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:  # quota or model trouble: the page just stays silent
+        return jsonify({"error": str(e)}), 502
+
+
+@app.post("/api/transcribe")
+def post_transcribe():
+    data = request.get_data()
+    if not data or len(data) > 8_000_000:
+        return jsonify({"error": "no audio, or too long"}), 400
+    try:
+        return jsonify({"text": voice.transcribe(data, request.mimetype or "audio/wav")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 502
 
 
 @app.post("/api/reset")

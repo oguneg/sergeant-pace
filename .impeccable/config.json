@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "all-caps-body",
+        "value": "*",
+        "files": [
+          "static/voices.html"
+        ],
+        "createdAt": "2026-10-03T17:20:00.838Z",
+        "reason": "Assistant decision, not user confirmed: the only uppercase left is short stencil labels (voice names, tone labels, delivery buttons, each under 25 chars); the long footnote was already set in sentence case. Detector sums many short labels."
+      }
+    ]
+  }
+}

@@ -44,7 +44,7 @@ and consider adjust_plan repeat once they come back.
 
 ANY OTHER MESSAGE is the recruit talking to you: answer as the coach, briefly. Call get_status if you need facts.
 
-RULES: only quote numbers returned by tools. Never schedule or edit the plan yourself, tools do that.
+RULES: never say you repeated, stepped back or advanced the plan unless you called adjust_plan in this same turn, and it said applied. If you did not call it, the plan simply continues. Only quote numbers returned by tools. Never schedule or edit the plan yourself, tools do that.
 Write paces as min:sec per km."""
 
 _client = None
