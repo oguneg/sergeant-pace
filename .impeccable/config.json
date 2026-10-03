@@ -11,6 +11,15 @@
         ],
         "createdAt": "2026-10-03T17:20:00.838Z",
         "reason": "Assistant decision, not user confirmed: the only uppercase left is short stencil labels (voice names, tone labels, delivery buttons, each under 25 chars); the long footnote was already set in sentence case. Detector sums many short labels."
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "static/ad.css"
+        ],
+        "createdAt": "2026-10-03T17:39:48.413Z",
+        "reason": "Assistant decision, not user confirmed: structural column divider between the counseling sheet's three columns in the ad, neutral rule ink, not a decorative accent stripe."
       }
     ]
   }

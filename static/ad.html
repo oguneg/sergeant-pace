@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sergeant Pace · the ad</title>
+<link rel="stylesheet" href="/static/ad.css?v=5">
+<script>
+  // if anything goes wrong, say so on screen instead of showing nothing
+  window.adMessage = function (text) {
+    var m = document.getElementById('msg') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'msg' }));
+    m.textContent = text;
+  };
+  if (location.protocol === 'file:') window.addEventListener('DOMContentLoaded', function () {
+    adMessage('This page was opened as a file. Start the app (python server.py) and open http://localhost:8000/ad instead.');
+  });
+  window.addEventListener('error', function (e) { adMessage('Something broke: ' + (e.message || 'unknown error') + (e.filename ? ' (' + e.filename.split('/').pop() + ':' + e.lineno + ')' : '')); });
+  window.addEventListener('unhandledrejection', function (e) { adMessage('Something broke: ' + ((e.reason && e.reason.message) || e.reason)); });
+</script>
+</head>
+<body>
+<svg class="defs" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="insignia" viewBox="0 0 48 48">
+      <path fill="currentColor" d="M5 18 24 6l19 12v6.5L24 12.5 5 24.5Z"/><path fill="currentColor" d="M5 27 24 15l19 12v6.5L24 21.5 5 33.5Z"/><path fill="currentColor" d="M5 36 24 24l19 12v6.5L24 30.5 5 42.5Z"/>
+    </symbol>
+    <filter id="ink" x="-6%" y="-10%" width="112%" height="120%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="3" result="edge"/>
+      <feDisplacementMap in="SourceGraphic" in2="edge" scale="3" result="rough"/>
+      <feTurbulence type="fractalNoise" baseFrequency="0.05 0.7" numOctaves="2" seed="9" result="press"/>
+      <feColorMatrix in="press" type="matrix" values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -1.7 2.0" result="mask"/>
+      <feComposite in="rough" in2="mask" operator="in"/>
+    </filter>
+  </defs>
+</svg>
+
+<div id="stage"></div>
+
+<div id="start"><div><b>Sergeant Pace</b><span>Press space to play with sound</span><button id="go-silent" type="button">Play without sound</button></div></div>
+<div id="hud"><b id="tc">0:00.0</b> / 1:00
+  <button id="b-play">Space: play</button><button id="b-restart">R: restart</button><button id="b-audio">E: export audio</button>
+  <span style="margin-left:10px;color:#8d927c">left/right scrub &nbsp; H hide controls &nbsp; F full screen</span></div>
+<div id="bar"><i id="bar-i"></i></div>
+
+<script src="/static/ad.js?v=9"></script>
+</body>
+</html>

@@ -108,14 +108,14 @@ def _wav(pcm: bytes, rate: int = 24000) -> bytes:
     return buf.getvalue()
 
 
-def speak(text: str, voice: str | None = None, style: str | None = None) -> bytes:
+def speak(text: str, voice: str | None = None, style: str | None = None, notes: str | None = None) -> bytes:
     """Return WAV bytes of the sergeant barking `text`. Cached on disk so a take is only paid for once."""
     global _good_tts
     cur = current()
     voice, style = voice or cur["voice"], style or cur["style"]
     if voice not in VOICE_NAMES or style not in STYLES:
         raise ValueError("unknown voice or style")
-    notes = STYLES[style][1]
+    notes = notes or STYLES[style][1]  # a custom direction overrides the preset (used for the ad's recruit line)
     key = hashlib.sha1(f"{voice}|{notes}|{text}".encode()).hexdigest()
     path = CACHE / f"{key}.wav"
     if path.exists() and path.stat().st_size > 1000:  # ignore empty or truncated cache files

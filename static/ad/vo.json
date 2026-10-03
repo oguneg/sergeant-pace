@@ -1,0 +1,42 @@
+{
+  "v1": {
+    "text": "Are you tired of the yes men surrounding you?",
+    "duration": 3.12
+  },
+  "v2": {
+    "text": "Do you need to be yelled at to get motivated?",
+    "duration": 3.4
+  },
+  "v3": {
+    "text": "If yes... have you met Sergeant Pace?",
+    "duration": 3.84
+  },
+  "v4": {
+    "text": "Can't run? Good. Nobody can on day one. We start with thirty seconds.",
+    "duration": 5.6
+  },
+  "v5": {
+    "text": "Run! Walk! Run! Slow is the whole point, recruit.",
+    "duration": 7.2
+  },
+  "v6": {
+    "text": "Effort nine? Are you trying to retire early?! I just rewrote your whole plan.",
+    "duration": 6.84
+  },
+  "v7": {
+    "text": "My knee hurts a little.",
+    "duration": 2.76
+  },
+  "v8": {
+    "text": "Then see a doctor. Then get back here.",
+    "duration": 3.72
+  },
+  "v9": {
+    "text": "Five K. Ten K. Half. Full marathon. No excuses.",
+    "duration": 6.81
+  },
+  "v10": {
+    "text": "Sergeant Pace. Fall in.",
+    "duration": 2.73
+  }
+}
