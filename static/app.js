@@ -215,6 +215,29 @@ function submitIntake() {
   ask('/api/chat', { message: msg }, 'intake');
 }
 
+/* ============================================================ WEIGH-IN */
+function afterSession() { (S.current && S.current.weighin_due ? viewWeighin : viewOrders)(); }
+
+function viewWeighin() {
+  const b = S.current.body, last = b.log[b.log.length - 1];
+  const v = mount(`<section class="sheet">${header('Weigh-in', 'Body record · every two weeks', 'SP-7')}
+    <div class="body"><h1 class="q">Get on the scale.</h1><p class="say">Honest numbers. They set how hard I let you push.</p>
+    <form id="wf" novalidate><div class="fields">
+      <label class="field"><span class="cap">Weight (kg)</span><input name="weight_kg" type="number" step="0.1" min="30" max="300" value="${b.weight_kg}" required inputmode="decimal"></label>
+      <label class="field"><span class="cap">Body fat (%)</span><input name="body_fat_pct" type="number" step="0.1" min="3" max="70" value="${b.body_fat_pct}" required inputmode="decimal"></label></div>
+      <p class="cap" style="margin-top:14px">Last time, week ${last.week}: ${last.weight_kg} kg, ${last.body_fat_pct}% body fat. Cannot measure body fat? Leave the last number.</p>
+      <div class="actions"><button class="btn" type="submit">File weigh-in</button><button type="button" class="link" id="not-today">Not today</button></div></form></div></section>`);
+  const f = $('#wf', v); $('input', f).focus(); $('input', f).select();
+  f.addEventListener('submit', (e) => {
+    e.preventDefault(); if (!f.reportValidity()) return;
+    ask('/api/weighin', { weight_kg: Number(f.weight_kg.value), body_fat_pct: Number(f.body_fat_pct.value) }, 'weighin');
+  });
+  $('#not-today', v).addEventListener('click', async () => {
+    try { S.current = await (await fetch('/api/weighin/skip', { method: 'POST' })).json(); } catch (e) { /* carry on */ }
+    renderBar(); viewOrders();
+  });
+}
+
 /* ============================================================ ORDERS */
 const fmtMin = (m) => (m < 1 ? `${Math.round(m * 60)}s` : Number.isInteger(m) ? String(m) : (Math.round(m * 10) / 10).toString());
 
@@ -240,16 +263,19 @@ function viewOrders() {
   const std = [['Easy pace', c.easy_pace], ['Pace ceiling', c.pace_limit], ['Effort target', '5 to 6 of 10']];
   if (n.kind !== 'distance') std.push(['Running time', `${fmtMin(n.run_minutes)} of ${fmtMin(n.total_minutes)} min`]);
   else std.push(['Distance', `${n.km} km`]);
+  const road = (c.estimates || []).find((e) => !e.cleared);
+  if (road && road.weeks) std.push([`Road to ${road.short}`, `about ${road.weeks} weeks`]);
   const v = mount(`<section class="sheet">${header('Training order', n.label, 'SP-2')}
     <div class="body"><h1 class="job">${esc(n.summary)}</h1>${march(n)}${legend}
       <div class="actions" style="margin:0 0 clamp(22px, 3vw, 36px)"><button class="btn" id="go">Acknowledge, begin run</button><button class="link" id="refuse">Refuse this order</button></div>
       <div class="cols"><div><span class="cap">Orders</span><ol class="orders">${n.steps.map((s) => `<li>${esc(s)}</li>`).join('')}</ol></div>
         <div class="stds"><span class="cap">Standards</span>${std.map(([l, t]) => `<div><span class="cap">${l}</span><span class="typed">${esc(t)}</span></div>`).join('')}</div></div>
       <div class="sim"><span class="cap">Demo, fake this run</span>
-        <button data-sim="good">Went well</button><button data-sim="hard">Too hard</button><button data-sim="hurt">Injured</button><button data-sim="skip">Skipped</button></div>
+        <button data-sim="good">Went well</button><button data-sim="easy">Felt easy</button><button data-sim="hard">Too hard</button><button data-sim="hurt">Injured</button><button data-sim="skip">Skipped</button><button data-weighin>Weigh-in</button></div>
     </div></section>`);
   $('#go', v).addEventListener('click', viewRun);
   $('#refuse', v).addEventListener('click', () => ask('/api/skip', { notes: '' }, 'skip'));
+  $('[data-weighin]', v).addEventListener('click', viewWeighin);
   v.querySelectorAll('[data-sim]').forEach((b) => b.addEventListener('click', () => ask('/api/sim', { scenario: b.dataset.sim }, b.dataset.sim === 'skip' ? 'skip' : 'run')));
 }
 
@@ -366,10 +392,12 @@ const SHELL = {
   run: ['Counseling session', 'Run statement under review', 'SP-4'],
   skip: ['Counseling session', 'Order refused', 'SP-4'],
   chat: ['Audience with the sergeant', 'Recruit asked for a word', 'SP-5'],
+  weighin: ['Weigh-in review', 'Body record under review', 'SP-7'],
 };
 const MODES = {
   plan: [['continue', 'Continue plan'], ['repeat', 'Repeat level'], ['step_back', 'Step back'], ['advance', 'Advance']],
   intake: [['run_walk', 'Run/walk start'], ['gentle', 'Gentle start'], ['ladder', 'Ladder start']],
+  weighin: [['relaxed', 'Limits relaxed'], ['same', 'Barely moved'], ['tight', 'Limits tightened']],
 };
 
 function counselShell(kind, ctx) {
@@ -395,10 +423,13 @@ function counselShell(kind, ctx) {
   return v;
 }
 
+const PRAISE = new Set(['too_easy', 'getting_faster', 'near_limit']);        // good news: shown with a blue tick, never a scolding
+const flagKey = (f) => f.split(':')[0].split(' (')[0];
 function flagParts(f) {
   const key = f.split(':')[0].split(' (')[0], detail = f.includes(': ') ? f.slice(f.indexOf(': ') + 2) : '';
   const names = { incomplete: 'Incomplete', too_hard: 'Effort too high', too_fast: 'Pace too fast', overran: 'Overran the order',
-    possible_injury: 'Possible injury', skipped: 'Refused orders', implausible_claim: 'Claim not believed' };
+    possible_injury: 'Possible injury', skipped: 'Refused orders', implausible_claim: 'Claim not believed', rapid_change: 'Check the scale',
+    too_easy: 'Getting stronger', getting_faster: 'Faster than expected', near_limit: 'Near your ceiling' };
   return { title: names[key] || key.replace(/_/g, ' '), detail: detail ? detail.charAt(0).toUpperCase() + detail.slice(1) : '' };
 }
 
@@ -410,15 +441,35 @@ function buildSpec(kind, data, ctx) {
     const sp = find('save_profile'), r = (sp && sp.result) || {}, a = (sp && sp.args) || {};
     spec.facts = [['Age', `${a.age} years`], ['Weight', `${a.weight_kg} kg`], ['Height', `${a.height_cm} cm`], ['Body fat', `${a.body_fat_pct} %`],
       ['BMI', r.bmi ? String(r.bmi) : '-'], ['Longest run', a.longest_run_km ? `${a.longest_run_km} km` : 'None, cannot run']];
-    spec.checks.push(r.high_risk_profile ? { tone: 'bad', title: 'High-risk profile', detail: 'Stricter pace and effort limits apply to you.' }
-      : { tone: 'ok', title: 'Standard profile', detail: 'Standard pace and effort limits apply.' });
+    const lim = r.limits || {};
+    spec.checks.push({ tone: lim.caution >= 0.66 ? 'bad' : 'ok', title: `${lim.label ? lim.label[0].toUpperCase() + lim.label.slice(1) : 'Standard'} limits`,
+      detail: `Pace ceiling ${lim.pace_ceiling}. Effort ceiling ${lim.effort_ceiling} of 10.` });
     if (r.starts_with_run_walk) spec.checks.push({ tone: 'ok', title: r.gentle_start ? 'Gentle start' : 'Run/walk start', detail: r.gentle_start ? 'Extra-long walk breaks, on purpose.' : 'Intervals first. Nobody runs a kilometre on day one.' });
     (r.flags || []).forEach((f) => spec.checks.push({ tone: 'bad', ...flagParts(f) }));
+    const road = (st.estimates || []).filter((e) => !e.cleared && e.weeks);
+    if (road.length) spec.checks.push({ tone: 'ok', title: 'The road ahead', detail: road.map((e) => `${e.short} ${e.weeks}`).join(', ') + ' weeks on plan. The marathon is a rough guess. Setbacks stretch it.' });
     spec.modes = MODES.intake;
     spec.chosen = r.gentle_start ? 'gentle' : r.starts_with_run_walk ? 'run_walk' : 'ladder';
     spec.stamp = { tone: 'blue', text: 'Enlisted', small: 'Sgt Pace' };
     spec.reason = r.easy_pace ? `Easy pace ${r.easy_pace}. Never faster than ${r.pace_limit_do_not_beat}.` : '';
     spec.nextLabel = 'View first orders';
+  } else if (kind === 'weighin') {
+    const wi = find('log_weighin'), r = (wi && wi.result) || {}, L = r.logged || {}, sl = r.since_last || {}, ss = r.since_start || {};
+    const sg = (x, u) => `${x > 0 ? '+' : ''}${x} ${u}`;
+    spec.facts = [['Weight', `${L.weight_kg} kg`], ['Body fat', `${L.body_fat_pct} %`], ['BMI', String(r.bmi)],
+      ['Since last', `${sg(sl.weight_kg, 'kg')}, ${sg(sl.body_fat_pct, '%')}`], ['Since start', `${sg(ss.weight_kg, 'kg')}, ${sg(ss.body_fat_pct, '%')}`]];
+    const d = sl.weight_kg;
+    spec.checks.push(d < 0 ? { tone: 'ok', title: `Down ${Math.abs(d)} kg`, detail: 'Since the last weigh-in. Keep running.' }
+      : d > 0 ? { tone: 'ok', title: `Up ${d} kg`, detail: 'Weight is not the goal. Showing up is.' } : { tone: 'ok', title: 'Holding steady', detail: 'No change. The work continues.' });
+    const lb = r.limits_before || {}, la = r.limits || {}, lc = r.limits_change;
+    if (lc) spec.checks.push({ tone: lc === 'tightened' ? 'bad' : 'ok', title: lc === 'relaxed' ? 'Limits relaxed' : lc === 'tightened' ? 'Limits tightened' : 'Limits nudged',
+      detail: `Pace ceiling ${lb.pace_ceiling} to ${la.pace_ceiling}. Effort ceiling ${lb.effort_ceiling} to ${la.effort_ceiling}.` });
+    (r.flags || []).forEach((f) => spec.checks.push({ tone: 'bad', ...flagParts(f) }));
+    if ((r.flags || []).length) spec.hazard = 'Check the scale. See a doctor if this is real.';
+    spec.modes = MODES.weighin; spec.chosen = r.limits_change === 'relaxed' ? 'relaxed' : r.limits_change === 'tightened' ? 'tight' : 'same';
+    spec.stamp = lc === 'tightened' ? { tone: 'red', text: 'Limits tightened', small: 'More body fat, more care' }
+      : lc === 'relaxed' ? { tone: 'blue', text: 'Limits relaxed', small: 'Leaner, more room' } : { tone: 'blue', text: 'Recorded', small: 'Body file updated' };
+    spec.reason = r.limits ? `Pace ceiling ${r.limits.pace_ceiling}. Effort ceiling ${r.limits.effort_ceiling} of 10. Next weigh-in in two weeks.` : '';
   } else if (kind === 'run' || kind === 'skip') {
     const h = st.history[st.history.length - 1] || {}, lr = find('log_run'), sr = find('skip_run');
     const note = (h.flags || []).find((f) => f.startsWith('recruit_note'));
@@ -427,12 +478,14 @@ function buildSpec(kind, data, ctx) {
     if (h.pace) spec.facts.push(['Pace', h.pace]);
     if (note) spec.facts.push(['Recruit note', note.replace('recruit_note: ', '')]);
     const flags = (h.flags || []).filter((f) => !f.startsWith('recruit_note'));
-    const hr = flags.some((f) => f.includes('high_risk_profile')), ceiling = hr ? 6 : 7, key = (f) => f.split(':')[0].split(' (')[0];
+    const ceiling = h.limits && h.limits.effort != null ? h.limits.effort : 7, key = (f) => f.split(':')[0].split(' (')[0];
     flags.forEach((f) => {
       const parts = flagParts(f);
       if (key(f) === 'too_hard') parts.detail = `Effort ${h.effort} of 10. Target 5 to 6, ceiling ${ceiling}.`;
-      spec.checks.push({ tone: 'bad', ...parts });
+      if (key(f) === 'too_easy') parts.detail = `Effort ${h.effort} of 10 on a full run. Below the target, so the work gets harder.`;
+      spec.checks.push({ tone: PRAISE.has(key(f)) ? 'ok' : 'bad', ...parts });
     });
+    const problems = flags.filter((f) => !PRAISE.has(key(f)));
     if (sr && sr.result && sr.result.skipped_in_a_row > 1) spec.checks.push({ tone: 'bad', title: `${sr.result.skipped_in_a_row} refusals in a row`, detail: 'Warning issued.' });
     const ms = lr && lr.result && lr.result.milestone_just_reached;
     if (ms) spec.checks.push({ tone: 'ok', title: 'Qualification earned', detail: ms });
@@ -448,11 +501,11 @@ function buildSpec(kind, data, ctx) {
     const cite = lead ? RULES[lead] : '';
     const hzKey = PRIORITY.find((k) => HAZARDS[k] && flags.some((f) => key(f) === k)); if (hzKey) spec.hazard = HAZARDS[hzKey];
     spec.reason = 'No change needed. The plan continues.';
-    spec.stamp = flags.length ? { tone: 'red', text: 'Warning issued', small: cite || 'Plan continues' } : { tone: 'blue', text: 'Cleared', small: 'Plan continues' };
+    spec.stamp = problems.length ? { tone: 'red', text: 'Warning issued', small: cite || 'Plan continues' } : { tone: 'blue', text: 'Cleared', small: 'Plan continues' };
     if (h.skipped) { spec.reason = 'The same order stands until it is run.'; spec.stamp = { tone: 'red', text: 'Order stands', small: RULES.skipped }; }
     if (adj) {
       spec.chosen = adj.args.mode || 'continue'; spec.reason = adj.args.reason || '';
-      const STAMPS = { continue: spec.stamp, repeat: { tone: 'red', text: 'Repeat level', small: cite }, step_back: { tone: 'red', text: 'Step back', small: cite }, advance: { tone: 'blue', text: 'Advanced', small: 'Clean runs earned it' } };
+      const STAMPS = { continue: spec.stamp, repeat: { tone: 'red', text: 'Repeat level', small: cite }, step_back: { tone: 'red', text: 'Step back', small: cite }, advance: { tone: 'blue', text: 'Advanced', small: flags.some((f) => key(f) === 'too_easy') ? 'Rule: easy effort moves you up' : 'Clean runs earned it' } };
       spec.stamp = STAMPS[spec.chosen] || spec.stamp;
       if (adj.result && adj.result.applied === false && spec.chosen !== 'continue') {
         spec.stamp = { tone: 'red', text: 'Denied', small: 'Rule: no advance after a bad run' };
@@ -461,6 +514,8 @@ function buildSpec(kind, data, ctx) {
     }
     const b = new Map((data.before || []).map((u) => [u.id, u]));
     st.upcoming.forEach((u) => { const o = b.get(u.id); if (o && o.summary !== u.summary) spec.diff.push({ label: `Week ${u.week}, Day ${u.day}`, old: o.summary, neu: u.summary }); });
+    const was = (data.before_estimates || []).find((e) => !e.cleared), now = (st.estimates || []).find((e) => e.name === (was && was.name));
+    if (was && now && !now.cleared && was.weeks !== now.weeks) spec.diff.unshift({ label: `Road to ${now.short}`, old: `${was.weeks} weeks`, neu: `${now.weeks} weeks` });
   } else {
     spec.nextLabel = 'Back to orders';
   }
@@ -531,7 +586,7 @@ async function playCounsel(v, kind, spec) {
   const n = spec.next;
   foot.innerHTML = `<div class="next">${kind === 'chat' ? '' : `Next orders: <b>${esc(n.label)}</b>, ${esc(n.summary)}`}</div>
     <div class="foot-actions"><button class="btn plain mic" id="talk">${MIC}Talk back</button><button class="btn" id="proceed">${esc(spec.nextLabel)}</button></div>`;
-  $('#proceed', v).addEventListener('click', viewOrders); $('#proceed', v).focus({ preventScroll: true });
+  $('#proceed', v).addEventListener('click', afterSession); $('#proceed', v).focus({ preventScroll: true });
   voiceInput($('#talk', v), (text) => ask('/api/chat', { message: text }, 'chat', { said: text }));
   if (kind !== 'chat') $('.fh p', v).textContent = 'Decision filed';
   playing = false; sheet.removeEventListener('click', onClick); renderBar();
@@ -568,11 +623,13 @@ function openFile() {
   el.innerHTML = `<div class="fh">${INSIGNIA}<div><h2>Training file</h2><p>Recruit 0001</p></div><button class="btn plain" id="close-file" style="padding:10px 16px;font-size:20px">Close</button></div>
     <section><h3>Qualifications</h3><div class="quals">${c.ladder.map((r) => {
       const st = c.milestones.includes(r.name) ? 'done' : nextRung && r.name === nextRung.name ? 'next' : '';
-      return `<div class="qual ${st}"><b>${esc(r.name.split(' ')[0])}</b><span>${st === 'done' ? 'Qualified' : st === 'next' ? 'Next' : 'Locked'}</span></div>`; }).join('')}</div></section>
+      const est = (c.estimates || []).find((e) => e.name === r.name), eta = est && !est.cleared && est.weeks ? `<span class="eta">${est.rough ? 'about ' : '~'}${est.weeks} wk</span>` : '';
+      return `<div class="qual ${st}"><b>${esc(r.name.split(' ')[0])}</b><span>${st === 'done' ? 'Qualified' : st === 'next' ? 'Next' : 'Locked'}</span>${eta}</div>`; }).join('')}</div></section>
     <section><h3>Next two weeks</h3><table class="prog"><tr><th></th><th>Day 1</th><th>Day 2</th><th>Day 3</th></tr>${Object.entries(weeks).map(([w, d]) =>
       `<tr><td class="wk">W${w}</td>${[1, 2, 3].map((k) => `<td class="${d[k] && d[k].id === c.next.id ? 'now' : ''}">${d[k] ? esc(d[k].summary) : ''}</td>`).join('')}</tr>`).join('')}</table></section>
     <section><h3>Service record</h3>${hist.length ? hist.map((h) => `<div class="svc"><b>${esc(h.label)}</b><div class="typed">${h.skipped ? 'Skipped' : `${h.completion_pct}% done · effort ${h.effort}/10`}</div>
-      ${(h.flags || []).filter((f) => !f.startsWith('recruit_note')).map((f) => `<div class="typed bad">${esc(flagParts(f).title)}</div>`).join('')}</div>`).join('') : '<p class="typed">No runs on file.</p>'}</section>
+      ${(h.flags || []).filter((f) => !f.startsWith('recruit_note')).map((f) => `<div class="typed ${PRAISE.has(flagKey(f)) ? 'good' : 'bad'}">${esc(flagParts(f).title)}</div>`).join('')}</div>`).join('') : '<p class="typed">No runs on file.</p>'}</section>
+    <section><h3>Body record</h3>${(c.body.log.slice().reverse().map((e) => `<div class="svc"><b>Week ${e.week}</b><div class="typed">${e.weight_kg} kg · ${e.body_fat_pct} % body fat</div></div>`)).join('')}</section>
     <section><h3>Request an audience</h3><form class="ask" id="ask"><input id="ask-in" placeholder="Ask the sergeant anything" autocomplete="off"><button class="btn plain mic" type="button" id="ask-mic" aria-label="Speak">${MIC}</button><button class="btn" type="submit">Send</button></form></section>
     <footer><a class="link" href="/voices">Choose the sergeant's voice</a><br><button class="link" id="reset">Reset recruit</button></footer>`;
   el.hidden = false; $('#scrim').hidden = false;
@@ -596,6 +653,6 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#fil
 
 /* ============================================================ BOOT */
 fetch('/api/state').then((r) => r.json()).then((s) => {
-  if (s.onboarded) { S.current = s; renderBar(); viewOrders(); } else viewIntake();
+  if (s.onboarded) { S.current = s; renderBar(); afterSession(); } else viewIntake();
 }).catch(() => viewIntake());
 })();

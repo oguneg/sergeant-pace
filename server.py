@@ -1,3 +1,5 @@
+import os
+
 from flask import Flask, Response, jsonify, request, send_from_directory
 
 import agent
@@ -7,6 +9,12 @@ import voice
 
 app = Flask(__name__, static_folder="static")
 _chat = None  # single shared conversation: one recruit per demo
+
+
+@app.after_request
+def no_stale_copies(resp):
+    resp.headers["Cache-Control"] = "no-store"  # this is a demo you keep editing, never serve an old file
+    return resp
 
 
 def chat():
@@ -26,6 +34,9 @@ def state_view() -> dict:
         "pace_limit": tools.fmt_pace(tools.pace_limit(state)),
         "ladder": [{"name": n, "km": km} for n, km in tools.LADDER],
         "milestones": state["milestones"],
+        "estimates": tools.estimate_milestones(state),
+        "weighin_due": tools.weighin_due(state),
+        "body": {"weight_kg": state["profile"]["weight_kg"], "body_fat_pct": state["profile"]["body_fat_pct"], "log": tools._body_log(state)},
         "program_complete": state["program_complete"],
         "next": tools.explain(state, state["upcoming"][0]),
         "upcoming": [{"id": s["id"], "week": s["week"], "day": s["day"], "summary": tools.describe(s)}
@@ -36,13 +47,14 @@ def state_view() -> dict:
 
 
 def turn(message: str, **extra):
-    before = state_view().get("upcoming", [])  # lets the page show what the agent changed
+    prior = state_view()
+    before, before_est = prior.get("upcoming", []), prior.get("estimates", [])  # lets the page show what the agent changed
     try:
         reply, trace = chat().send(message)
     except Exception as e:
         return jsonify({"error": str(e)}), 502
     return jsonify({"reply": reply, "trace": trace, "model": chat().model, "state": state_view(),
-                    "before": before, **extra})
+                    "before": before, "before_estimates": before_est, **extra})
 
 
 def next_session():
@@ -84,6 +96,21 @@ def post_run():
     return turn(sim.report_message(s, form))
 
 
+@app.post("/api/weighin")
+def post_weighin():
+    state = tools.load_state()
+    if not state:
+        return jsonify({"error": "Finish the intake form first, recruit."}), 400
+    body = request.json or {}
+    return turn(sim.weighin_message(number(body.get("weight_kg")), number(body.get("body_fat_pct"))))
+
+
+@app.post("/api/weighin/skip")
+def post_weighin_skip():
+    tools.snooze_weighin()
+    return jsonify(state_view())
+
+
 @app.post("/api/skip")
 def post_skip():
     s = next_session()
@@ -101,6 +128,11 @@ def post_sim():
     form = sim.sim_form(state, request.json.get("scenario"))
     text = sim.report_message(s, form) if form else sim.skip_message(s, "felt lazy")
     return turn(text, sent=text)
+
+
+@app.get("/ad")
+def ad_page():
+    return send_from_directory("static", "ad.html")
 
 
 @app.get("/voices")
@@ -158,4 +190,4 @@ def post_reset():
 
 
 if __name__ == "__main__":
-    app.run(port=8000, debug=False)
+    app.run(port=int(os.getenv("SP_PORT", "8000")), debug=False)

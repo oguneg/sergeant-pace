@@ -25,11 +25,13 @@ An agent, not a static plan: it re-plans after every single run from what the re
 - 3 runs a week, shown as Week N, Day 1 to 3 (no weekday names). The plan always shows the next two weeks.
 - Early interval sessions cannot be reported as km or minutes. Reporting is by intervals completed (or minutes run non-stop for timed runs) plus a 1 to 10 effort rating. Distance and time are asked only for km runs.
 - The recruit reports one run at a time, never in weekly batches.
+- Every two weeks (6 runs) the recruit is asked for a weigh-in: weight and body fat. 'Not today' postpones it by a week. The numbers update the profile, so the safety limits follow (leaner relaxes them a little, more body fat tightens them a little), and the sergeant reacts without ever mocking a body. A weigh-in reports how far the limits moved (relaxed, nudged or tightened). A change of 4 kg or 4% of body weight between weigh-ins is flagged as a likely scale error.
+- The page shows the estimated weeks until the 5K, 10K, half and full marathon (the marathon is a rough guess), recomputed from the plan after every run.
 
 ## Capabilities and Constraints
 
 - Agent tools: save_profile, get_status, log_run, skip_run, adjust_plan. Plan numbers, paces and limits come from code and tool results; the model never invents them.
-- Safety guardrails live in code. Pace and effort limits are stricter for high-risk profiles (body fat 30% or more, or age 55 or more). Advancing is blocked after a bad run or less than 3 runs after the last advance. Pain notes trigger a stop-and-see-a-doctor response.
+- Safety guardrails live in code. Pace and effort limits slide continuously with body fat (22% to 38%) and age (45 to 65), never in jumps at round numbers: at 30.1% and 29.7% body fat the limits are almost identical. The effort ceiling runs from 7 (standard) to 6 (strictest), the pace ceiling from 8% to 4% under the easy pace. Effort is judged in bands: clearly over the ceiling is flagged, near it is a gentle note. Advancing is blocked after a bad run or less than 3 runs after the last advance (2 after a run that felt easy, 1 after two easy runs in a row). A full run at effort 4 or lower is treated as the runner getting stronger, never as slacking: it is praised and the plan moves up. A distance run faster than baseline at a comfortable effort (5 or lower) raises the baseline easy pace (at most 4% per run) instead of being scolded; only fast and hard counts as reckless. Pain notes trigger a stop-and-see-a-doctor response.
 - Runs on Flask with a single static page. One shared conversation, one recruit per server.
 - Model: Gemini, on a free-tier key with tiny per-model daily quotas, so the agent falls through a list of models. Real Strava data is not connected.
 

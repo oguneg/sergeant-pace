@@ -243,6 +243,8 @@ textarea.ruled::placeholder { color: #9aa28b; font-weight: 400; }
 .qual:last-child { border-right: 0; }
 .qual b { display: block; font: 800 30px/1 var(--stencil); }
 .qual span { font: 600 12px/1.2 var(--form); font-stretch: 75%; letter-spacing: 0.1em; text-transform: uppercase; color: var(--caption); }
+.qual .eta { display: block; margin-top: 6px; font: 700 15px/1.1 var(--type); letter-spacing: 0; text-transform: none; color: var(--typed); }
+.qual.done .eta { color: var(--paper); }
 .qual.done { background: var(--blue); color: var(--paper); } .qual.done span { color: #cfd8ee; }
 .qual.next { background: #f1e3b0; }
 .prog { width: 100%; border-collapse: collapse; }
@@ -254,7 +256,7 @@ textarea.ruled::placeholder { color: #9aa28b; font-weight: 400; }
 .svc { padding: 9px 0; border-bottom: 1px dotted #6a7260; }
 .svc b { font: 800 19px/1.1 var(--stencil); letter-spacing: 0.04em; text-transform: uppercase; }
 .svc .typed { font-size: 16px; }
-.svc .bad { color: var(--red); }
+.svc .bad { color: var(--red); } .svc .good { color: var(--blue); }
 .ask { display: flex; gap: 10px; }
 .ask input { flex: 1; min-width: 0; padding: 12px 14px; border: 2px solid var(--rule); background: #f4f6ee; font: 700 19px/1.2 var(--type); color: var(--typed); outline: none; }
 .ask input:focus { outline: 3px solid var(--blue); outline-offset: 2px; }

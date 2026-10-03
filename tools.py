@@ -4,9 +4,12 @@ The plan is a queue of upcoming sessions (always 6 = 2 weeks, 3 sessions a week)
 the queue and the queue refills from a list of training "levels". The agent steers the trajectory with adjust_plan.
 """
 import json
+import math
 from pathlib import Path
 
-STATE_FILE = Path(__file__).parent / "state.json"
+import os
+
+STATE_FILE = Path(os.getenv("SP_STATE_FILE") or Path(__file__).parent / "state.json")  # tests point this at a scratch file
 LADDER = [("5K", 5.0), ("10K", 10.0), ("Half marathon (21K)", 21.1), ("Marathon (42K)", 42.2)]
 # Couch-to-5K style run/walk levels: (run_min, walk_min, reps). walk 0 means one continuous run.
 INTERVAL_PROGRAM = [(1, 1, 6), (2, 2, 5), (3, 2, 5), (5, 2, 4), (8, 2, 3), (12, 2, 2), (20, 0, 1), (25, 0, 1), (30, 0, 1)]
@@ -20,6 +23,10 @@ SESSIONS_PER_WEEK = 3
 LOOKAHEAD = 2 * SESSIONS_PER_WEEK
 PAIN_WORDS = ("pain", "hurt", "knee", "injur", "sore", "ache", "dizzy", "chest", "sprain", "shin")
 BAD_FLAGS = ("incomplete", "too_hard", "too_fast", "possible_injury")
+WEIGHIN_EVERY = 6        # runs between weigh-ins: two weeks at three runs a week
+WEIGHIN_SNOOZE = 3       # a skipped weigh-in is asked again after one week
+EASY_EFFORT = 4          # a full run at this effort or lower means the work is no longer hard enough
+PACE_GAIN_CAP = 0.04     # the baseline easy pace can improve at most 4% per run
 
 
 def load_state() -> dict:
@@ -35,8 +42,8 @@ def reset_state() -> None:
 
 
 def fmt_pace(pace: float) -> str:
-    minutes = int(pace)
-    return f"{minutes}:{round((pace - minutes) * 60):02d} /km"
+    total = round(pace * 60)
+    return f"{total // 60}:{total % 60:02d} /km"
 
 
 def fmt_dur(minutes: float) -> str:
@@ -52,25 +59,43 @@ def bmi(profile: dict) -> float:
     return profile["weight_kg"] / (profile["height_cm"] / 100) ** 2
 
 
+def _ramp(x: float, lo: float, hi: float) -> float:
+    return max(0.0, min(1.0, (x - lo) / (hi - lo)))
+
+
+def caution(profile: dict) -> float:
+    """0 (standard limits) to 1 (strictest). It rises smoothly with body fat (22% to 38%) and age (45 to 65), so
+    crossing a round number like 30% never flips the rules: 30.1% and 29.7% get almost the same limits."""
+    return round(max(_ramp(profile["body_fat_pct"], 22, 38), _ramp(profile["age"], 45, 65)), 3)
+
+
+def effort_ceiling(profile: dict) -> float:
+    """The highest effort (out of 10) that is not flagged: 7 for standard limits, sliding down to 6 for the strictest."""
+    return round(7 - caution(profile), 1)
+
+
 def on_ramp_start(profile: dict) -> int:
-    """Which level a recruit who cannot run starts at: 0 is the gentlest, len(EASY_ON_RAMP) is the standard week 1."""
-    if bmi(profile) >= 35 or profile["body_fat_pct"] >= 40:
-        return 0
-    if bmi(profile) >= 30 or profile["body_fat_pct"] >= 35:
-        return 1
-    if profile["age"] >= 55:
-        return 2
-    return len(EASY_ON_RAMP)
+    """Which level a recruit who cannot run starts at: 0 is the gentlest, len(EASY_ON_RAMP) is the standard week 1.
+    Graded from body fat, BMI and age rather than switched at round numbers."""
+    c = max(caution(profile), _ramp(bmi(profile), 26, 38))
+    return round(len(EASY_ON_RAMP) * (1 - c))
 
 
 def is_high_risk(profile: dict) -> bool:
-    return profile["body_fat_pct"] >= 30 or profile["age"] >= 55
+    """Kept for display only: the limits themselves are continuous (see caution)."""
+    return caution(profile) >= 0.5
 
 
 def pace_limit(state: dict) -> float:
-    """Fastest pace (min/km) we tolerate on a training run. Stricter for high-risk profiles."""
-    margin = 0.96 if is_high_risk(state["profile"]) else 0.92
+    """Fastest pace (min/km) we tolerate on a training run: 8% under the easy pace, sliding to 4% as caution rises."""
+    margin = 0.92 + 0.04 * caution(state["profile"])
     return state["easy_pace"] * margin
+
+
+def limits_view(state: dict) -> dict:
+    c = caution(state["profile"])
+    return {"caution": c, "label": "strict" if c >= 0.66 else "moderate" if c >= 0.33 else "standard",
+            "pace_ceiling": fmt_pace(pace_limit(state)), "effort_ceiling": effort_ceiling(state["profile"])}
 
 
 # ---------- plan construction ----------
@@ -175,6 +200,52 @@ def _brief(s: dict) -> dict:
     return {"id": s["id"], "label": label(s), "summary": describe(s)}
 
 
+def _body_log(state: dict) -> list:
+    """The weigh-in history. Recruits saved before weigh-ins existed start from their intake numbers."""
+    if "body_log" not in state:
+        p = state["profile"]
+        state["body_log"] = [{"at_run": 0, "week": 1, "weight_kg": p["weight_kg"], "body_fat_pct": p["body_fat_pct"]}]
+    return state["body_log"]
+
+
+def weighin_due(state: dict) -> bool:
+    runs = len(state["history"])
+    return runs >= max(_body_log(state)[-1]["at_run"] + WEIGHIN_EVERY, state.get("weighin_snooze", 0))
+
+
+def snooze_weighin() -> None:
+    """The recruit said not today: ask again after a week."""
+    state = load_state()
+    if state:
+        state["weighin_snooze"] = len(state["history"]) + WEIGHIN_SNOOZE
+        save_state(state)
+
+
+def estimate_milestones(state: dict) -> list:
+    """Weeks until each milestone if the recruit simply stays on plan (3 runs a week).
+
+    Counts the runs left until the long run that reaches each distance. It moves earlier when the runner advances and
+    later after a repeat, a step back or a skipped run, because the plan itself moves.
+    """
+    levels, nxt, out = state["levels"], state["upcoming"][0], []
+    for name, km in LADDER:
+        if name in state["milestones"]:
+            out.append({"name": name, "short": name.split()[0], "weeks": 0, "cleared": True})
+            continue
+        level, slot, k, weeks = nxt["level"], nxt["slot"], 0, None
+        for _ in range(len(levels) * SESSIONS_PER_WEEK + 6):
+            lv = levels[min(level, len(levels) - 1)]
+            if lv["phase"] == "ladder" and slot == SESSIONS_PER_WEEK - 1 and lv["long_km"] >= km - 1e-6:
+                weeks = math.ceil((k + 1) / SESSIONS_PER_WEEK)
+                break
+            k += 1
+            slot += 1
+            if slot == SESSIONS_PER_WEEK:
+                slot, level = 0, min(level + 1, len(levels) - 1)
+        out.append({"name": name, "short": name.split()[0], "weeks": weeks, "cleared": False, "rough": km > 30})
+    return out
+
+
 # ---------- tools the agent can call ----------
 
 def save_profile(
@@ -220,16 +291,19 @@ def save_profile(
         "upcoming": [],
         "history": [],
         "milestones": [name for name, km in LADDER if km <= longest_run_km],
+        "body_log": [{"at_run": 0, "week": 1, "weight_kg": weight_kg, "body_fat_pct": body_fat_pct}],
+        "weighin_snooze": 0,
         "program_complete": False,
         "last_advance_id": -99,
     }
     _extend(state)
     save_state(state)
-    return {"flags": flags, "high_risk_profile": is_high_risk(state["profile"]),
+    return {"flags": flags, "limits": limits_view(state), "high_risk_profile": is_high_risk(state["profile"]),
             "starts_with_run_walk": levels[0]["phase"] == "intervals",
             "gentle_start": start_level < ramp and longest_run_km < 1, "bmi": round(bmi(profile), 1),
             "easy_pace": fmt_pace(easy_pace), "pace_limit_do_not_beat": fmt_pace(pace_limit(state)),
             "first_run": explain(state, state["upcoming"][0]),
+            "road_ahead_weeks": {e["short"]: e["weeks"] for e in estimate_milestones(state)},
             "upcoming": [_brief(s) for s in state["upcoming"]]}
 
 
@@ -238,11 +312,12 @@ def get_status() -> dict:
     state = load_state()
     if not state:
         return {"error": "no recruit on file yet, run onboarding"}
-    return {"profile": state["profile"], "high_risk_profile": is_high_risk(state["profile"]),
+    return {"profile": state["profile"], "limits": limits_view(state), "high_risk_profile": is_high_risk(state["profile"]),
             "next_run": explain(state, state["upcoming"][0]),
             "upcoming": [_brief(s) for s in state["upcoming"]],
             "recent_runs": state["history"][-5:], "milestones_reached": state["milestones"],
-            "run_walk_program_complete": state["program_complete"]}
+            "road_ahead_weeks": {e["short"]: e["weeks"] for e in estimate_milestones(state)},
+            "run_walk_program_complete": state["program_complete"], "weighin_due": weighin_due(state)}
 
 
 def log_run(
@@ -259,7 +334,8 @@ def log_run(
         session_id: The id of the next run (must be the first upcoming session).
         completed: For interval sessions, how many run intervals they finished. For non-stop timed runs, how many
             minutes they ran without stopping. Ignored (pass 0) for distance runs.
-        effort: How hard it felt, 1 (very easy) to 10 (all out). Easy running should be 5 to 6.
+        effort: How hard it felt, 1 (very easy) to 10 (all out). The target is 5 to 6. Lower on a full run means they are
+            getting stronger and should move up.
         distance_km: Distance run, only for distance runs, otherwise 0.
         duration_min: Total time in minutes, only for distance runs, otherwise 0.
         notes: Anything the recruit said about it (pain, tiredness, etc).
@@ -283,17 +359,26 @@ def log_run(
         flags.append(f"incomplete: only {pct}% of the planned work")
 
     effort = max(1, min(10, int(effort)))
-    high_risk = is_high_risk(state["profile"])
-    if effort >= (7 if high_risk else 8):
-        flags.append(f"too_hard ({'high_risk_profile' if high_risk else 'normal_profile'}): "
-                     f"effort {effort}/10, easy running should be 5 to 6")
+    ceiling = effort_ceiling(state["profile"])
+    over = effort - ceiling
+    # graded, so one notch of body fat never flips the verdict: clearly over is a problem, near the ceiling is a note
+    if over > 0.75:
+        flags.append(f"too_hard: effort {effort}/10 is over your ceiling of {ceiling:g}, easy running should be 5 to 6")
+    elif over > 0.25:
+        flags.append(f"near_limit: effort {effort}/10 is close to your ceiling of {ceiling:g}. Fine today, do not make it a habit")
 
-    pace = None
+    pace, old_easy, improved = None, state["easy_pace"], False
     if s["kind"] == "distance" and distance_km > 0 and duration_min > 0:
         pace = duration_min / distance_km
-        if pace < pace_limit(state):
-            flags.append(f"too_fast ({'high_risk_profile' if high_risk else 'normal_profile'}): "
-                         f"pace {fmt_pace(pace)} beats the limit {fmt_pace(pace_limit(state))}")
+        if pace < pace_limit(state) and over > -0.25:
+            # fast AND hard is reckless
+            flags.append(f"too_fast: pace {fmt_pace(pace)} beats the limit {fmt_pace(pace_limit(state))}")
+        elif pace < old_easy * 0.97 and effort <= 5:
+            # fast and comfortable is fitness: raise the baseline instead of scolding
+            new_easy = old_easy - min(old_easy - pace, old_easy * PACE_GAIN_CAP)
+            state["easy_pace"], improved = new_easy, True
+            flags.append(f"getting_faster: {fmt_pace(pace)} at effort {effort}/10 beats the old easy pace {fmt_pace(old_easy)}, "
+                         f"baseline raised to {fmt_pace(new_easy)}")
         if distance_km > s["km"] * 1.15:
             flags.append(f"overran: planned {s['km']} km, ran {distance_km} km")
     injury = bool(notes) and any(w in notes.lower() for w in PAIN_WORDS)
@@ -307,9 +392,19 @@ def log_run(
     if s["kind"] != "distance" and (pct < 80 or effort >= 9 or injury):
         recommend = ("step_back: they struggled, give them longer walk breaks, do not hesitate" if (prev_shaky or pct < 60 or injury)
                      else "repeat: they struggled a little, replay this level")
+    # a full run that felt easy is not slacking, it is the runner getting stronger: praise it and move them up
+    easy_run = pct >= 100 and effort <= EASY_EFFORT and not injury and not any(f.startswith(BAD_FLAGS) for f in flags)
+    if easy_run and s["kind"] == "distance":
+        easy_run = pace is not None and pace <= old_easy * 1.02   # an easy effort at a slow plod proves nothing
+    if easy_run:
+        flags.append(f"too_easy: effort {effort}/10 on a full run, below the 5 to 6 target. They are getting stronger, not slacking")
+        recommend = "advance: it felt easy, so praise them and move them up a level now"
+    elif improved:
+        recommend = "praise: faster than their baseline at a comfortable effort, the baseline pace was raised"
 
     entry = {"id": s["id"], "label": label(s), "summary": describe(s), "completion_pct": pct, "effort": effort,
-             "pace": fmt_pace(pace) if pace else None, "flags": flags}
+             "pace": fmt_pace(pace) if pace else None, "flags": flags,
+             "limits": {"effort": ceiling, "pace": fmt_pace(pace_limit(state))}}
     state["history"].append(entry)
     state["upcoming"].pop(0)
     _extend(state)
@@ -324,9 +419,45 @@ def log_run(
         state["program_complete"] = True
         milestone = "Run/walk program complete (30 min non-stop)"
     save_state(state)
-    return {"logged": entry, "recommend": recommend, "milestone_just_reached": milestone,
+    return {"logged": entry, "recommend": recommend, "easy_pace_now": fmt_pace(state["easy_pace"]), "milestone_just_reached": milestone,
             "recent_runs": state["history"][-3:],
             "next_run": _brief(state["upcoming"][0])}
+
+
+def log_weighin(weight_kg: float, body_fat_pct: float) -> dict:
+    """Record the recruit's periodic weigh-in. Weight and body fat set the safety limits, so they must stay current.
+
+    Args:
+        weight_kg: Current body weight in kilograms.
+        body_fat_pct: Current body fat percentage. Pass 0 if they could not measure it, and the last value is kept.
+    """
+    state = load_state()
+    if not state:
+        return {"error": "no recruit on file yet"}
+    if not 30 <= weight_kg <= 300:
+        return {"error": "that weight is not believable, ask again"}
+    p, log = state["profile"], _body_log(state)
+    prev, first, before = log[-1], log[0], limits_view(state)
+    flags = []
+    if abs(weight_kg - prev["weight_kg"]) >= max(4.0, 0.04 * prev["weight_kg"]):
+        flags.append(f"rapid_change: {prev['weight_kg']} to {weight_kg} kg since the last weigh-in. Check the scale, and "
+                     "see a doctor if it is real, losing weight this fast is not training")
+    p["weight_kg"] = weight_kg
+    if body_fat_pct and 3 <= body_fat_pct <= 70:
+        p["body_fat_pct"] = body_fat_pct
+    entry = {"at_run": len(state["history"]), "week": len(state["history"]) // SESSIONS_PER_WEEK + 1,
+             "weight_kg": weight_kg, "body_fat_pct": p["body_fat_pct"]}
+    log.append(entry)
+    state["weighin_snooze"] = 0
+    after = limits_view(state)
+    d_effort = after["effort_ceiling"] - before["effort_ceiling"]
+    change = ("relaxed" if d_effort >= 0.2 else "tightened" if d_effort <= -0.2
+              else "nudged" if (d_effort or before["pace_ceiling"] != after["pace_ceiling"]) else None)
+    save_state(state)
+    return {"logged": entry, "bmi": round(bmi(p), 1),
+            "since_last": {"weight_kg": round(weight_kg - prev["weight_kg"], 1), "body_fat_pct": round(p["body_fat_pct"] - prev["body_fat_pct"], 1)},
+            "since_start": {"weight_kg": round(weight_kg - first["weight_kg"], 1), "body_fat_pct": round(p["body_fat_pct"] - first["body_fat_pct"], 1)},
+            "limits_before": before, "limits": after, "limits_change": change, "flags": flags}
 
 
 def skip_run(reason: str = "") -> dict:
@@ -355,8 +486,8 @@ def adjust_plan(mode: str, reason: str) -> dict:
     """Change the trajectory of the upcoming runs. Only call this when the plan should change.
 
     Args:
-        mode: "advance" jumps to the next training level now (code blocks it after a bad run or if the last advance
-            was less than 3 runs ago). "repeat" replays the current level from its start. "step_back" drops to the
+        mode: "advance" jumps to the next training level now. Use it when a full run felt easy (the too_easy flag).
+            Code blocks it after a bad run, or if the last advance was too recent (3 runs, or 2 after an easy run). "repeat" replays the current level from its start. "step_back" drops to the
             previous level, which in the run/walk program means shorter jogs and longer walk breaks. "continue" changes nothing.
         reason: One short sentence on why (shown to the recruit).
     """
@@ -373,9 +504,14 @@ def adjust_plan(mode: str, reason: str) -> dict:
         return {**result, "upcoming": [_brief(s) for s in state["upcoming"]]}
     if mode == "advance":
         bad_last = last and (last.get("skipped") or any(f.startswith(BAD_FLAGS) for f in last["flags"]))
-        if bad_last or cur["id"] - state["last_advance_id"] < SESSIONS_PER_WEEK:
+        easy = lambda h: any(f.startswith("too_easy") for f in h["flags"])
+        last_easy = bool(last) and easy(last)
+        prev_easy = len(state["history"]) > 1 and easy(state["history"][-2])
+        # normally 3 runs between advances; a run that felt easy shortens it to 2, two easy runs in a row to 1
+        min_gap = (1 if prev_easy else 2) if last_easy else SESSIONS_PER_WEEK
+        if bad_last or cur["id"] - state["last_advance_id"] < min_gap:
             return {**result, "applied": False,
-                    "blocked": "advance blocked: the last run was not clean, or the last advance was under 3 runs ago"}
+                    "blocked": f"advance blocked: the last run was not clean, or the last advance was under {min_gap} runs ago"}
         level = min(cur["level"] + 1, len(state["levels"]) - 1)
         state["last_advance_id"] = cur["id"]
     elif mode == "repeat":
@@ -387,4 +523,4 @@ def adjust_plan(mode: str, reason: str) -> dict:
     return {**result, "applied": True, "upcoming": [_brief(s) for s in state["upcoming"]]}
 
 
-ALL_TOOLS = [save_profile, get_status, log_run, skip_run, adjust_plan]
+ALL_TOOLS = [save_profile, get_status, log_run, skip_run, adjust_plan, log_weighin]

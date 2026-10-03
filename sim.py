@@ -6,7 +6,7 @@ import random
 
 import tools
 
-SCENARIOS = ["good", "hard", "skip", "hurt"]
+SCENARIOS = ["good", "easy", "hard", "skip", "hurt"]
 
 
 def report_message(s: dict, f: dict) -> str:
@@ -28,6 +28,11 @@ def report_message(s: dict, f: dict) -> str:
     return "\n".join(lines)
 
 
+def weighin_message(weight: float, body_fat: float) -> str:
+    return (f"[Weigh-in] Weight: {weight} kg. Body fat: {body_fat}% (0 means they could not measure it). "
+            f"Call log_weighin with weight_kg={weight}, body_fat_pct={body_fat} exactly, then react in character.")
+
+
 def skip_message(s: dict, reason: str = "") -> str:
     return (f"[Run skipped] {tools.label(s)} (session_id={s['id']}): {tools.describe(s)}. "
             f"Reason: {reason or 'no reason given'}. Call skip_run, then respond.")
@@ -47,6 +52,13 @@ def sim_form(state: dict, scenario: str | None) -> dict | None:
         else:
             form["distance_km"] = s["km"]
             form["duration_min"] = round(s["km"] * easy * random.uniform(0.98, 1.06), 1)
+    elif scenario == "easy":
+        form["effort"] = 3
+        if s["kind"] != "distance":
+            form["completed"] = full
+        else:
+            form["distance_km"] = s["km"]
+            form["duration_min"] = round(s["km"] * easy * 0.9, 1)  # a touch faster than baseline and still comfortable
     elif scenario == "hard":
         form["effort"] = 9
         if s["kind"] != "distance":
