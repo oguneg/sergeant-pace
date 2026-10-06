@@ -313,3 +313,16 @@ textarea.ruled::placeholder { color: #9aa28b; font-weight: 400; }
 .ask .mic { padding: 12px 14px; }
 .toast { position: fixed; left: 50%; bottom: 24px; z-index: 12; transform: translateX(-50%); max-width: min(92vw, 560px); padding: 12px 20px; background: var(--paper); color: var(--red); border: 3px double var(--red); font: 800 20px/1.2 var(--stencil); letter-spacing: 0.05em; text-transform: uppercase; text-align: center; box-shadow: 0 14px 30px rgba(0, 0, 0, 0.5); }
 @media (max-width: 620px) { .foot-actions { flex-direction: column; } #voice-toggle { margin-left: 0; } }
+
+/* ---------- privacy: consent box, small print, header link ---------- */
+a.tab { text-decoration: none; display: inline-block; }
+.consent { display: flex; gap: 14px; align-items: flex-start; margin-top: 22px; padding: 14px 16px; border: 2px solid var(--rule); background: #f4f6ee; font: 500 16px/1.5 var(--form); color: var(--rule); cursor: pointer; }
+.consent input { width: 24px; height: 24px; flex: none; margin-top: 2px; accent-color: var(--blue); }
+.consent a, .fine a { color: var(--blue); }
+.fine { margin: 22px 0 0; font: 500 15px/1.45 var(--form); color: var(--caption); }
+@media (max-width: 520px) {
+  .bar { gap: 8px; padding: 10px 12px; flex-wrap: wrap; }
+  .brand { gap: 8px; } .brand svg { width: 28px; height: 28px; } .brand b { font-size: 20px; }
+  .tab { padding: 9px 10px; font-size: 12px; letter-spacing: 0.08em; margin-left: 0; }
+  .bar .tab:first-of-type { margin-left: auto; }
+}

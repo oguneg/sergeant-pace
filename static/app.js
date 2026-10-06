@@ -162,16 +162,25 @@ function recordRows() {
   ];
 }
 
+// Explicit consent for health data: nothing leaves the browser until this is ticked on the last step.
+function consentHtml() {
+  const free = !S.meta || S.meta.free_tier !== false;
+  return `<label class="consent"><input type="checkbox" name="consent" ${S.ans.consent ? 'checked' : ''} required>
+    <span>I agree that the numbers above, and anything I type or say to the sergeant, are processed as described in the <a href="/privacy" target="_blank" rel="noopener">privacy notice</a>, including being sent to Google's Gemini AI. ${free ? "Google's free tier lets people at Google read it. " : ''}I won't type my name or contact details.</span></label>`;
+}
+
 function viewIntake() {
   const order = stepOrder(), id = order[S.step], st = STEPS[id], last = S.step === order.length - 1;
   let controls;
   if (id === 'can') {
     controls = `<div class="choices">
       <button class="choice" data-can="no">${box('red')}<span><b>Cannot run</b><span class="d">Not yet. Everyone starts somewhere.</span></span></button>
-      <button class="choice" data-can="yes">${box('red')}<span><b>Can run a little</b><span class="d">I can jog for a few minutes.</span></span></button></div>`;
+      <button class="choice" data-can="yes">${box('red')}<span><b>Can run a little</b><span class="d">I can jog for a few minutes.</span></span></button></div>
+      <p class="fine">Nothing leaves your browser until you report for duty. <a href="/privacy" target="_blank" rel="noopener">Privacy notice</a></p>`;
   } else {
     controls = `<form id="f" novalidate><div class="fields">${st.fields.map(([k, label, type, ph, at]) => `
       <label class="field"><span class="cap">${label}</span><input name="${k}" type="${type}" placeholder="${ph}" value="${esc(S.ans[k] || '')}" inputmode="${type === 'number' ? 'decimal' : 'text'}" ${Object.entries(at).map(([a, b]) => b === true ? a : `${a}="${b}"`).join(' ')} autocomplete="off"></label>`).join('')}</div>
+      ${last ? consentHtml() : ''}
       <div class="actions">${S.step ? '<button type="button" class="btn plain" id="back">Back</button>' : ''}<button class="btn" type="submit">${last ? 'Report for duty' : 'Confirm'}</button></div></form>`;
   }
   const n = mount(`<section class="sheet">${header('Enlistment record', 'Individual training file · recruit intake', 'SP-1')}
@@ -631,7 +640,7 @@ function openFile() {
       ${(h.flags || []).filter((f) => !f.startsWith('recruit_note')).map((f) => `<div class="typed ${PRAISE.has(flagKey(f)) ? 'good' : 'bad'}">${esc(flagParts(f).title)}</div>`).join('')}</div>`).join('') : '<p class="typed">No runs on file.</p>'}</section>
     <section><h3>Body record</h3>${(c.body.log.slice().reverse().map((e) => `<div class="svc"><b>Week ${e.week}</b><div class="typed">${e.weight_kg} kg · ${e.body_fat_pct} % body fat</div></div>`)).join('')}</section>
     <section><h3>Request an audience</h3><form class="ask" id="ask"><input id="ask-in" placeholder="Ask the sergeant anything" autocomplete="off"><button class="btn plain mic" type="button" id="ask-mic" aria-label="Speak">${MIC}</button><button class="btn" type="submit">Send</button></form></section>
-    <footer>${c.public ? '' : `<a class="link" href="/voices">Choose the sergeant's voice</a><br>`}<button class="link" id="reset">Reset recruit</button></footer>`;
+    <footer>${c.public ? '' : `<a class="link" href="/voices">Choose the sergeant's voice</a><br>`}<a class="link" href="/privacy" target="_blank" rel="noopener">Privacy notice</a><br><a class="link" href="/api/export" download>Download my data</a><br><button class="link" id="reset">Reset recruit</button></footer>`;
   el.hidden = false; $('#scrim').hidden = false;
   $('#close-file').focus();
   $('#close-file').addEventListener('click', closeFile);
@@ -653,6 +662,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#fil
 
 /* ============================================================ BOOT */
 fetch('/api/state').then((r) => r.json()).then((s) => {
+  S.meta = s;
   if (s.onboarded) { S.current = s; renderBar(); afterSession(); } else viewIntake();
 }).catch(() => viewIntake());
 })();

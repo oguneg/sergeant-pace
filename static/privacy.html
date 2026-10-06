@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy notice · Sergeant Pace</title>
+<meta name="description" content="What Sergeant Pace stores, who sees it, and how to delete it.">
+<meta name="robots" content="noindex">
+<link rel="preload" href="/static/fonts/bigshoulders-stencil-var.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="/static/app.css?v=13">
+<style>
+  .notice { padding: clamp(20px, 3.5vw, 44px); max-width: 78ch; }
+  .notice h1 { margin: 0 0 6px; font: 800 clamp(34px, 4.4vw, 56px)/1 var(--stencil); letter-spacing: 0.03em; text-transform: uppercase; }
+  .notice h2 { margin: 34px 0 8px; font: 800 clamp(22px, 2.4vw, 30px)/1.1 var(--stencil); letter-spacing: 0.04em; text-transform: uppercase; border-bottom: 2px solid var(--rule); padding-bottom: 6px; }
+  .notice p, .notice li { font: 400 17px/1.6 var(--form); color: var(--rule); }
+  .notice p { margin: 10px 0; }
+  .notice ul { margin: 10px 0; padding-left: 22px; }
+  .notice li { margin: 6px 0; }
+  .notice a { color: var(--blue); }
+  .notice .stamp { display: inline-block; font: 600 13px/1 var(--form); font-stretch: 75%; letter-spacing: 0.1em; text-transform: uppercase; color: var(--caption); }
+  .notice .short { margin: 22px 0 0; padding: 16px 20px; border: 2px solid var(--rule); background: #f4f6ee; }
+  .notice .short li { margin: 8px 0; }
+  .notice table { width: 100%; border-collapse: collapse; margin: 14px 0; font: 400 15px/1.5 var(--form); }
+  .notice th, .notice td { text-align: left; vertical-align: top; padding: 10px 12px; border: 1.5px solid var(--rule); }
+  .notice th { font: 700 12px/1.2 var(--form); font-stretch: 75%; letter-spacing: 0.1em; text-transform: uppercase; background: var(--paper-shade); color: var(--caption); }
+  .notice code { font: 700 14px var(--type); color: var(--typed); }
+  .tablewrap { overflow-x: auto; }
+  .back { display: inline-block; margin-top: 30px; }
+  @media (max-width: 760px) {
+    .notice table, .notice tbody, .notice tr, .notice td { display: block; width: 100%; }
+    .notice tr:first-child { display: none; }
+    .notice tr { margin: 14px 0; border: 2px solid var(--rule); background: #f4f6ee; }
+    .notice td { border: 0; border-bottom: 1px solid var(--paper-shade); padding: 10px 14px; }
+    .notice td:last-child { border-bottom: 0; }
+    .notice td::before { content: attr(data-label); display: block; margin-bottom: 3px; font: 700 12px/1.2 var(--form); font-stretch: 75%; letter-spacing: 0.1em; text-transform: uppercase; color: var(--caption); }
+  }
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand"><b>Sergeant Pace</b></div>
+  <a class="tab" href="/" style="margin-left:auto;text-decoration:none">Back to the app</a>
+</header>
+
+<main>
+  <section class="sheet">
+    <div class="notice">
+      <span class="stamp">Privacy notice · last updated 7 October 2026</span>
+      <h1>What happens to your details</h1>
+      <p>Sergeant Pace is a hobby project, not a company product. This page says in plain words what it stores, who else sees it, and how to remove it.</p>
+
+      <ul class="short">
+        <li>You enter body numbers and running details. They are kept for <b>{{state_days}} days</b> after you last use the app, and you can download or delete them at any time.</li>
+        <li>What you type or say, and your numbers, are sent to Google's Gemini AI to write the sergeant's replies. {{google_short}}</li>
+        <li>No accounts, no ads, no analytics and no tracking cookies.</li>
+        <li>This is a coaching demo, not medical advice.</li>
+      </ul>
+
+      <h2>Who is responsible</h2>
+      <p>Ogün Gündogdu, a private individual in Stockholm, Sweden, runs this site as a personal project. To contact me, use the email button at <a href="https://ogun.se/#contact">ogun.se</a>.</p>
+
+      <h2>What is collected, and for how long</h2>
+      <div class="tablewrap">
+      <table>
+        <tr><th>What</th><th>Why</th><th>Where it goes</th><th>How long</th></tr>
+        <tr><td data-label="What">Age, weight, height, body fat, longest recent run and pace; run reports (how much you finished, effort, distance, time, and any note you type); weigh-ins; and the plan built from them</td><td data-label="Why">To build your training plan and set your safety limits</td><td data-label="Where it goes">A file on my server, tied to a random id in your cookie. Not tied to your name, email or any account</td><td data-label="How long">Deleted after {{state_days}} days without use, or straight away when you press <b>Reset recruit</b></td></tr>
+        <tr><td data-label="What">What you type to the sergeant</td><td data-label="Why">To write replies</td><td data-label="Where it goes">Sent to Google (see below). The running conversation is held in the server's memory only and is dropped when the server restarts or the conversation goes idle. Notes you attach to a run report are also saved in your file</td><td data-label="How long">As above</td></tr>
+        <tr><td data-label="What">Your voice, if you use the microphone</td><td data-label="Why">To turn what you say into text</td><td data-label="Where it goes">Sent to Google. Not saved on my server</td><td data-label="How long">Not kept by me</td></tr>
+        <tr><td data-label="What">The sergeant's spoken replies</td><td data-label="Why">To play the replies aloud</td><td data-label="Where it goes">The reply text is sent to Google, which returns audio. The audio is cached on my server so a repeated line is not paid for twice. It is not linked to you</td><td data-label="How long">Deleted after {{state_days}} days</td></tr>
+        <tr><td data-label="What">A cookie called <code>sp_sid</code></td><td data-label="Why">To remember which file is yours</td><td data-label="Where it goes">Your browser. It holds a random id and nothing else</td><td data-label="How long">{{cookie_days}} days. It is strictly necessary for the app to work, so there is no consent banner for it</td></tr>
+        <tr><td data-label="What">Server logs: your IP address, the time, the page requested and your browser type. Plus one short line per coach reply: a fragment of the random id, the model used, how long it took and which tools ran. Message text is not logged</td><td data-label="Why">To keep the site running, find faults and stop abuse. Your IP address is also used to limit how often one person can ask for replies</td><td data-label="Where it goes">On my server</td><td data-label="How long">Rotated automatically by size, so only recent logs exist</td></tr>
+      </table>
+      </div>
+
+      <h2>Health information and your consent</h2>
+      <p>Weight, body fat, age and notes about pain or injury are health-related. Data protection law (GDPR) treats that as a special category, so I only use it with your explicit consent. You give that consent by ticking the box before you send the intake form. Nothing is sent from your browser before then. You can withdraw consent at any time by pressing <b>Reset recruit</b>, which deletes your file, and by not using the app.</p>
+
+      <h2>Google</h2>
+      <p>{{google_long}}</p>
+      <p>Google may process this data in countries outside the EU and EEA, under Google's own terms. The server that runs the site is rented from OVHcloud, which therefore hosts the files described above.</p>
+
+      <h2>Your rights</h2>
+      <ul>
+        <li><b>See and download your data:</b> open <b>Training file</b> in the app and choose <b>Download my data</b>, or open <a href="/api/export">this link</a> in the same browser.</li>
+        <li><b>Delete it:</b> open <b>Training file</b> and choose <b>Reset recruit</b>.</li>
+        <li><b>Correct, restrict or object:</b> report new numbers through the app, or contact me.</li>
+        <li><b>Complain:</b> you can complain to the Swedish data protection authority, <a href="https://www.imy.se/en/">IMY</a>.</li>
+      </ul>
+      <p>There are no accounts, so I cannot tell whose file is whose. That means I can only act on the data in your own browser session, which is why the buttons above do the work.</p>
+
+      <h2>Who it is for</h2>
+      <p>Adults. It is not meant for children under 16.</p>
+
+      <h2>Not medical advice</h2>
+      <p>The limits in this app are a coaching demo and have not been checked by a doctor or physiotherapist. If you feel pain, dizziness or chest tightness, stop and see a doctor. Do not rely on this app for medical decisions.</p>
+
+      <h2>Changes</h2>
+      <p>If this changes, the date at the top changes too.</p>
+
+      <a class="btn plain back" href="/">Back to the app</a>
+    </div>
+  </section>
+</main>
+
+</body>
+</html>

@@ -65,13 +65,14 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-124 tests, no API key and no network needed:
+136 tests, no API key and no network needed:
 
 - **Guardrails** (`test_guardrails.py`): properties of the limits (bounded, monotonic, continuous) and each safety rule above.
 - **Simulated careers** (`test_simulated_careers.py`): 20 random recruits through 45 random runs, skips and weigh-ins using the demo's own scenario generator, checking the rules at every step.
 - **Rollback** (`test_agent_rollback.py`): a fake model that fails mid-turn, to prove the state is restored and the retry and model-switch paths work.
 - **Public server** (`test_server.py`): visitors are isolated from each other, forged cookies never become file names, rate and daily limits refuse before the model is called, error details never leak, and hostile input (NaN, huge numbers, long messages) is clamped.
 - **Intake validation** (`test_intake_validation.py`): impossible numbers from the model are rejected, saves are atomic, and tool traces are per thread.
+- **Privacy** (`test_privacy.py`): the notice is generated from the app's real settings, and each promise in it is tested: retention days, cookie lifetime, what it says about Google's free versus paid terms, that you can download only your own data, that Reset deletes it, and that cached speech expires.
 - **Shared client** (`test_agent_client.py`): a regression test for a bug that only showed up with two visitors at once. Each conversation built its own Gemini client and overwrote a global, so the first was garbage collected and closed mid-request.
 
 I checked the tests catch real regressions by breaking the code on purpose: loosening the pace cap, letting the effort ceiling rise, dropping the pain words, removing the advance gap, removing rollback, allowing an advance after a bad run, removing the rate and daily limits, trusting the session cookie, sharing one state file between visitors, and leaking error text. Each one fails the suite.
@@ -112,10 +113,20 @@ docker compose up -d --build
 
 After that, pushing to `main` runs the tests and then `deploy/update.sh` on the server over a restricted SSH key (see `.github/workflows/ci.yml`). The container is limited to 512 MB so it cannot starve its neighbours.
 
+## Privacy
+
+The app collects health-related numbers (age, weight, height, body fat, run reports), so it has a plain-language privacy notice at `/privacy`, generated from the app's real settings so it can't drift from what the code does.
+
+- **Explicit consent** is a required tick box on the last intake step. Nothing leaves the browser before it.
+- **Download and delete:** *Training file* has *Download my data* (`/api/export`, only ever your own file) and *Reset recruit*.
+- **Retention:** recruit files and cached speech expire after 14 days without use; logs are rotated by size.
+- **Google:** everything typed or said, and the numbers, are sent to the Gemini API. Google's free tier may use it to improve its products and lets reviewers read it, and it asks people not to submit sensitive data, so the consent text says so. With a paid key Google's terms differ. Set `SP_GEMINI_PAID=1` **only** when the key really is on a paid plan, and the notice changes to match.
+
 ## Known limitations
 
 - The spending limits live in memory, so a restart resets the day's count. There is one worker process by design.
 - No accounts: a recruit lives in a browser cookie and expires after 14 days of inactivity.
+- On the free Gemini tier, Google may use and read submitted content. The consent step says so; a paid key removes that.
 - Persona behaviour is prompt-driven and not yet measured (see Tests).
 - Run data is simulated or typed in. There is no Strava or watch integration yet.
 - Not medical advice. It is a coaching demo, and it tells people with pain to see a doctor.

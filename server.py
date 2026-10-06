@@ -27,6 +27,9 @@ STATE_TTL_DAYS = float(os.getenv("SP_STATE_TTL_DAYS", "14"))  # a recruit nobody
 MAX_SESSIONS = int(os.getenv("SP_MAX_SESSIONS", "100"))       # live conversations kept in memory; their files stay on disk
 MAX_CHAT_CHARS = 600
 COOKIE = "sp_sid"
+COOKIE_DAYS = 30
+# Set to 1 only when the Gemini key really is on a paid plan: the privacy notice changes what it says Google does with the content.
+PAID_GEMINI = os.getenv("SP_GEMINI_PAID") == "1"
 SID_RE = re.compile(r"^[A-Za-z0-9_-]{22}$")  # what secrets.token_urlsafe(16) makes; anything else is never used as a file name
 
 # Per client IP: (requests, seconds). Per day, across everyone: how many of that kind of call we pay for.
@@ -131,7 +134,7 @@ def prune_state_files() -> None:
         return
     _last_prune = time.time()
     cutoff = time.time() - STATE_TTL_DAYS * 86400
-    for f in STATE_DIR.glob("*.json"):
+    for f in [*STATE_DIR.glob("*.json"), *voice.CACHE.glob("*.wav")]:   # spoken replies are cached too: nothing outlives the notice
         try:
             if f.stat().st_mtime < cutoff:
                 f.unlink()
@@ -155,7 +158,7 @@ def identify():
 @app.after_request
 def finish(resp):
     if request.path.startswith("/api/") and g.get("new_sid"):
-        resp.set_cookie(COOKIE, g.sid, max_age=30 * 86400, httponly=True, samesite="Lax", secure=request.is_secure)
+        resp.set_cookie(COOKIE, g.sid, max_age=COOKIE_DAYS * 86400, httponly=True, samesite="Lax", secure=request.is_secure)
     if request.path.startswith("/api/") or not PUBLIC:
         resp.headers["Cache-Control"] = "no-store"  # a demo you keep editing, and answers that are one visitor's own
     resp.headers.setdefault("X-Content-Type-Options", "nosniff")
@@ -169,10 +172,11 @@ def finish(resp):
 def state_view() -> dict:
     state = tools.load_state()
     if not state:
-        return {"onboarded": False, "public": PUBLIC}
+        return {"onboarded": False, "public": PUBLIC, "free_tier": not PAID_GEMINI}
     return {
         "onboarded": True,
         "public": PUBLIC,
+        "free_tier": not PAID_GEMINI,
         "easy_pace": tools.fmt_pace(state["easy_pace"]),
         "pace_limit": tools.fmt_pace(tools.pace_limit(state)),
         "ladder": [{"name": n, "km": km} for n, km in tools.LADDER],
@@ -242,6 +246,48 @@ def healthz():
 @app.get("/")
 def index():
     return send_from_directory("static", "index.html")
+
+
+GOOGLE_FREE = {
+    "short": "Google's free tier lets Google use it to improve its products, and people at Google may read it.",
+    "long": ("This site currently uses the <b>free tier</b> of Google's Gemini API. Under Google's terms for that tier, Google uses the content "
+             "submitted and the responses to provide, improve and develop its products, and human reviewers may read, annotate and process it. "
+             "Google also asks people not to submit sensitive, confidential or personal information to the free tier. "
+             "This site never sends your name, contact details or cookie to Google, but <b>everything you type or say to the sergeant is sent</b>, "
+             "along with the numbers you enter. Please don't type your name, contact details or anything private."),
+}
+GOOGLE_PAID = {
+    "short": "Google's terms for paid use say it does not use it to improve its products.",
+    "long": ("This site uses Google's <b>paid</b> Gemini API. Under Google's terms for paid services, Google does not use prompts or responses "
+             "to improve its products, and keeps logs of them for a limited time only to detect and prevent misuse. "
+             "This site never sends your name, contact details or cookie to Google, but everything you type or say to the sergeant is sent, "
+             "along with the numbers you enter. Please don't type your name or contact details."),
+}
+
+
+def render_privacy() -> str:
+    google = GOOGLE_PAID if PAID_GEMINI else GOOGLE_FREE
+    days = str(int(STATE_TTL_DAYS)) if float(STATE_TTL_DAYS).is_integer() else str(STATE_TTL_DAYS)
+    html = (Path(app.static_folder) / "privacy.html").read_text(encoding="utf8")
+    for key, value in {"state_days": days, "cookie_days": str(COOKIE_DAYS), "google_short": google["short"], "google_long": google["long"]}.items():
+        html = html.replace("{{" + key + "}}", value)
+    return html
+
+
+@app.get("/privacy")
+def privacy_page():
+    return Response(render_privacy(), mimetype="text/html")
+
+
+@app.get("/api/export")
+def export_data():
+    """Everything stored about this visitor, as a download. The visitor can only ever reach their own file."""
+    state = tools.load_state()
+    if not state:
+        return jsonify({"error": "Nothing is stored for you yet."}), 404
+    body = json.dumps({"about": "Everything Sergeant Pace has stored for your browser. Press Reset recruit to delete it.",
+                       "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "data": state}, indent=2)
+    return Response(body, mimetype="application/json", headers={"Content-Disposition": 'attachment; filename="sergeant-pace-my-data.json"'})
 
 
 @app.get("/api/state")

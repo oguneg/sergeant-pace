@@ -15,6 +15,12 @@ services:
       SP_DAILY_SPEAK: "${SP_DAILY_SPEAK:-40}"
       SP_DAILY_TRANSCRIBE: "${SP_DAILY_TRANSCRIBE:-20}"
       SP_RATE_COACH: "${SP_RATE_COACH:-15}"
+      SP_GEMINI_PAID: "${SP_GEMINI_PAID:-0}"   # the privacy notice describes Google's free or paid terms; only set 1 for a paid key
+    logging:               # logs hold visitors' IP addresses, so they are rotated by size and never pile up
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     mem_limit: 512m          # a runaway here must not take the other projects on this server down with it
     volumes:
       - pace-data:/data
