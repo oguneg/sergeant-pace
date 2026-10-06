@@ -6,6 +6,8 @@ Built with the Gemini API (tool calling), Flask, and Gemini text-to-speech. Ther
 
 **Status: hackathon prototype, now running publicly.** Run data is simulated or typed in, and there are no real users yet. Strava integration is the next step. See [Known limitations](#known-limitations).
 
+**Built with Claude Code, with me directing it.** I decided what to build and what must never happen: the model talks and the code decides, hard safety limits, one recruit per visitor, spending caps. Claude Code did much of the typing, including most of the tests and the deployment setup, and the commits it helped with carry a `Co-Authored-By` line. I review the code and run the app in production. I checked the tests by deliberately breaking the guardrails and confirming they fail.
+
 ## The idea: the model talks, the code decides
 
 An LLM that coaches runners can say something dangerous if you let it. So the split is strict:

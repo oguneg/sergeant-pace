@@ -11,3 +11,4 @@ tts_cache/
 voice_choice.json
 sessions/
 .deployed
+private/
