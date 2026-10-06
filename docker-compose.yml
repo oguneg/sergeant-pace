@@ -1,0 +1,34 @@
+# Production: docker compose up -d --build
+# Needs .env with GEMINI_API_KEY and DOMAIN=your.domain (see .env.example).
+# HTTPS is handled by the server's shared Caddy proxy (~/proxy on the VPS): this service joins the
+# external "web" network and declares its domain with labels. Do not publish ports here.
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SP_TRUST_PROXY: "1"   # the real client IP comes from Caddy's X-Forwarded-For; only Caddy can reach this container
+      # Free-tier Gemini keys allow about 20 requests a day per model, and one coach turn can use several, so the daily caps
+      # are small. Raise them in .env once the key is on a paid plan.
+      SP_DAILY_COACH: "${SP_DAILY_COACH:-60}"
+      SP_DAILY_SPEAK: "${SP_DAILY_SPEAK:-40}"
+      SP_DAILY_TRANSCRIBE: "${SP_DAILY_TRANSCRIBE:-20}"
+      SP_RATE_COACH: "${SP_RATE_COACH:-15}"
+    mem_limit: 512m          # a runaway here must not take the other projects on this server down with it
+    volumes:
+      - pace-data:/data
+    networks:
+      - web
+      - default
+    labels:
+      caddy: ${DOMAIN:?Set DOMAIN in .env}
+      caddy.reverse_proxy: "{{upstreams 8000}}"
+      caddy.encode: zstd gzip
+
+networks:
+  web:
+    external: true
+
+volumes:
+  pace-data:

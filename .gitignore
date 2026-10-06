@@ -9,3 +9,5 @@ __pycache__/
 .impeccable/config.local.json
 tts_cache/
 voice_choice.json
+sessions/
+.deployed

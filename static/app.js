@@ -631,7 +631,7 @@ function openFile() {
       ${(h.flags || []).filter((f) => !f.startsWith('recruit_note')).map((f) => `<div class="typed ${PRAISE.has(flagKey(f)) ? 'good' : 'bad'}">${esc(flagParts(f).title)}</div>`).join('')}</div>`).join('') : '<p class="typed">No runs on file.</p>'}</section>
     <section><h3>Body record</h3>${(c.body.log.slice().reverse().map((e) => `<div class="svc"><b>Week ${e.week}</b><div class="typed">${e.weight_kg} kg · ${e.body_fat_pct} % body fat</div></div>`)).join('')}</section>
     <section><h3>Request an audience</h3><form class="ask" id="ask"><input id="ask-in" placeholder="Ask the sergeant anything" autocomplete="off"><button class="btn plain mic" type="button" id="ask-mic" aria-label="Speak">${MIC}</button><button class="btn" type="submit">Send</button></form></section>
-    <footer><a class="link" href="/voices">Choose the sergeant's voice</a><br><button class="link" id="reset">Reset recruit</button></footer>`;
+    <footer>${c.public ? '' : `<a class="link" href="/voices">Choose the sergeant's voice</a><br>`}<button class="link" id="reset">Reset recruit</button></footer>`;
   el.hidden = false; $('#scrim').hidden = false;
   $('#close-file').focus();
   $('#close-file').addEventListener('click', closeFile);

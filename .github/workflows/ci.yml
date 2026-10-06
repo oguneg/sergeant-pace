@@ -1,0 +1,48 @@
+# Test every push and pull request; deploy main to the VPS when the tests pass.
+# The DEPLOY_SSH_KEY secret is a key that can only run deploy/update.sh on the server.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest -q
+
+  deploy:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: production
+      url: https://pace.ogun.se
+    steps:
+      - name: Deploy to VPS
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          echo '57.129.169.251 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJa4Zyg+N/pp0ZaQ2lYOnP5LQGwd2YbGcjBS0ztlxcwE' > ~/.ssh/known_hosts
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o IdentitiesOnly=yes debian@57.129.169.251
+      - name: Check site
+        run: curl -fsS --retry 5 --retry-delay 3 --retry-all-errors https://pace.ogun.se/healthz

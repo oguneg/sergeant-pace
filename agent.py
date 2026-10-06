@@ -1,5 +1,6 @@
 import functools
 import os
+import threading
 import time
 
 from dotenv import load_dotenv
@@ -21,7 +22,7 @@ INTAKE: a message starting "[Intake form submitted]" holds the recruit's details
 values. If starts_with_run_walk is true, explain that real beginners start with run/walk intervals, nobody runs a
 kilometre on day one. If gentle_start is true, say they start with extra-long walking breaks on purpose: firm but kind,
 never mock their body, the walk breaks are the smart way to build up and they will shrink. Then tell them in two lines what the first run is about, and add the 5K estimate from road_ahead_weeks as motivation ("5K in about N weeks, if you stop whining"). implausible_claim flag: call
-them a liar and tell them to correct the form.
+them a liar and tell them to correct the form. If save_profile returns an error, nothing was saved: say which number is not believable and ask them to correct the form.
 
 AFTER EVERY RUN: a message starting "[Run report]" tells you exactly how to call log_run, so do that. Then:
 - Judge this run in 2 to 3 lines using the flags and numbers log_run returned. Never invent numbers.
@@ -62,7 +63,15 @@ RULES: never say you repeated, stepped back or advanced the plan unless you call
 Write paces as min:sec per km."""
 
 _client = None
-TRACE: list = []  # tool calls made during the current turn, shown in the UI / CLI
+_local = threading.local()
+
+
+def _trace() -> list:
+    """Tool calls made during the current turn, shown in the UI / CLI. Per thread, so two visitors never see each other's calls."""
+    if not hasattr(_local, "calls"):
+        _local.calls = []
+    return _local.calls
+
 # Free-tier quotas are per model and tiny (20 requests/day), so fall through the list when one runs out.
 MODELS = [m for m in [os.getenv("GEMINI_MODEL"), "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
                       "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"] if m]
@@ -72,7 +81,7 @@ def traced(fn):
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         result = fn(*args, **kwargs)
-        TRACE.append({"tool": fn.__name__, "args": kwargs, "result": result})
+        _trace().append({"tool": fn.__name__, "args": kwargs, "result": result})
         return result
     return wrapper
 
@@ -83,7 +92,7 @@ class Coach:
     def __init__(self):
         global _client
         if not os.getenv("GEMINI_API_KEY"):
-            raise SystemExit("Set GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)")
+            raise RuntimeError("Set GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)")
         _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])  # kept alive, the chat doesn't own it
         self.model_idx = 0
         self.chat = self._make_chat()
@@ -116,12 +125,12 @@ class Coach:
         busy = 0
         snapshot = tools.load_state()  # tools have side effects, so a failed turn must be rolled back before replaying it
         while True:
-            TRACE.clear()
+            _trace().clear()
             try:
                 resp = self.chat.send_message(text)
                 parts = resp.candidates[0].content.parts if resp.candidates else []
                 reply = "".join(p.text for p in parts if getattr(p, "text", None)) or "..."
-                return reply, list(TRACE)
+                return reply, list(_trace())
             except Exception as e:
                 tools.save_state(snapshot) if snapshot else tools.reset_state()
                 err = str(e)
@@ -157,7 +166,10 @@ def say(coach: Coach, text: str) -> None:
 
 
 def main() -> None:
-    chat = Coach()
+    try:
+        chat = Coach()
+    except RuntimeError as e:
+        raise SystemExit(str(e))
 
     print("Commands: /status  /reset  /quit. The website (server.py) is the full experience.")
     if tools.load_state():

@@ -14,7 +14,8 @@ from google.genai import types
 
 import agent
 
-CACHE = Path(__file__).parent / "tts_cache"
+CACHE = Path(os.getenv("SP_TTS_CACHE_DIR") or Path(__file__).parent / "tts_cache")
+CACHE_MAX_MB = float(os.getenv("SP_TTS_CACHE_MB", "300"))  # stop caching new clips past this, so a public site cannot fill the disk
 TTS_MODELS = [m for m in [os.getenv("GEMINI_TTS_MODEL"), "gemini-3.8-flash-tts", "gemini-3.8-flash-lite-tts",
                           "gemini-3.1-flash-tts-preview", "gemini-2.5-flash-preview-tts"] if m]
 CHOICE_FILE = Path(__file__).parent / "voice_choice.json"
@@ -108,6 +109,13 @@ def _wav(pcm: bytes, rate: int = 24000) -> bytes:
     return buf.getvalue()
 
 
+def _cache_has_room() -> bool:
+    try:
+        return sum(f.stat().st_size for f in CACHE.iterdir()) < CACHE_MAX_MB * 1e6
+    except OSError:
+        return True
+
+
 def speak(text: str, voice: str | None = None, style: str | None = None, notes: str | None = None) -> bytes:
     """Return WAV bytes of the sergeant barking `text`. Cached on disk so a take is only paid for once."""
     global _good_tts
@@ -134,8 +142,9 @@ def speak(text: str, voice: str | None = None, style: str | None = None, notes: 
             if part.mime_type and "rate=" in part.mime_type:
                 rate = int(part.mime_type.split("rate=")[1].split(";")[0])
             wav = _wav(_clean(part.data, rate), rate)
-            CACHE.mkdir(exist_ok=True)
-            path.write_bytes(wav)
+            CACHE.mkdir(parents=True, exist_ok=True)
+            if _cache_has_room():
+                path.write_bytes(wav)
             _good_tts = TTS_MODELS.index(model)
             return wav
         except Exception as e:  # quota, unknown model, no audio returned: try the next one

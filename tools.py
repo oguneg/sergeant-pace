@@ -3,13 +3,14 @@
 The plan is a queue of upcoming sessions (always 6 = 2 weeks, 3 sessions a week). Each logged run pops the front of
 the queue and the queue refills from a list of training "levels". The agent steers the trajectory with adjust_plan.
 """
+import contextvars
 import json
 import math
+import os
 from pathlib import Path
 
-import os
-
-STATE_FILE = Path(os.getenv("SP_STATE_FILE") or Path(__file__).parent / "state.json")  # tests point this at a scratch file
+STATE_FILE = Path(os.getenv("SP_STATE_FILE") or Path(__file__).parent / "state.json")  # the CLI's file, and the default for tests
+_state_file = contextvars.ContextVar("sp_state_file", default=None)
 LADDER = [("5K", 5.0), ("10K", 10.0), ("Half marathon (21K)", 21.1), ("Marathon (42K)", 42.2)]
 # Couch-to-5K style run/walk levels: (run_min, walk_min, reps). walk 0 means one continuous run.
 INTERVAL_PROGRAM = [(1, 1, 6), (2, 2, 5), (3, 2, 5), (5, 2, 4), (8, 2, 3), (12, 2, 2), (20, 0, 1), (25, 0, 1), (30, 0, 1)]
@@ -29,16 +30,32 @@ EASY_EFFORT = 4          # a full run at this effort or lower means the work is 
 PACE_GAIN_CAP = 0.04     # the baseline easy pace can improve at most 4% per run
 
 
+def use_state_file(path) -> None:
+    """Point the tools at one recruit's file for the current request. The web server calls this per visitor,
+    so every tool below (which takes no recruit argument, because the model must not choose whose file it edits) stays scoped to them."""
+    _state_file.set(Path(path))
+
+
+def _path() -> Path:
+    return _state_file.get() or STATE_FILE
+
+
 def load_state() -> dict:
-    return json.loads(STATE_FILE.read_text()) if STATE_FILE.exists() else {}
+    try:
+        return json.loads(_path().read_text())
+    except FileNotFoundError:
+        return {}
 
 
 def save_state(state: dict) -> None:
-    STATE_FILE.write_text(json.dumps(state, indent=2))
+    path = _path()
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(state, indent=2))
+    os.replace(tmp, path)  # a crash mid-write must never leave half a file
 
 
 def reset_state() -> None:
-    STATE_FILE.unlink(missing_ok=True)
+    _path().unlink(missing_ok=True)
 
 
 def fmt_pace(pace: float) -> str:
@@ -248,6 +265,22 @@ def estimate_milestones(state: dict) -> list:
 
 # ---------- tools the agent can call ----------
 
+# Hard bounds on intake numbers. Looser than "believable" on purpose: claims like a 2:30/km pace are flagged and called out
+# by the coach, but values outside these bounds are impossible (or would break the maths) and are rejected outright.
+INTAKE_BOUNDS = {"age": (10, 100), "weight_kg": (30, 300), "height_cm": (100, 230), "body_fat_pct": (3, 70), "longest_run_km": (0, 100)}
+
+
+def _intake_problem(age, weight_kg, height_cm, body_fat_pct, longest_run_km, pace_min_per_km) -> str | None:
+    values = {"age": age, "weight_kg": weight_kg, "height_cm": height_cm, "body_fat_pct": body_fat_pct, "longest_run_km": longest_run_km}
+    for name, (lo, hi) in INTAKE_BOUNDS.items():
+        v = values[name]
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) or not lo <= v <= hi:
+            return f"{name} must be a number between {lo} and {hi}"
+    if isinstance(pace_min_per_km, bool) or not isinstance(pace_min_per_km, (int, float)) or not math.isfinite(pace_min_per_km)             or not (pace_min_per_km == 0 or 2 <= pace_min_per_km <= 20):
+        return "pace_min_per_km must be 0 or a number between 2 and 20"
+    return None
+
+
 def save_profile(
     age: int,
     weight_kg: float,
@@ -266,6 +299,9 @@ def save_profile(
         longest_run_km: Longest single run they did recently, in km. Use 0 if they cannot run at all.
         pace_min_per_km: Their pace on that run in minutes per km (e.g. 6.5 for 6:30/km). Use 0 if they cannot run.
     """
+    problem = _intake_problem(age, weight_kg, height_cm, body_fat_pct, longest_run_km, pace_min_per_km)
+    if problem:  # the model supplies these from free text, so never trust them
+        return {"error": f"{problem}. Nothing was saved: tell the recruit which number is not believable and ask them to correct the form."}
     flags = []
     if longest_run_km > 42.2 or (pace_min_per_km and pace_min_per_km < 3.5):
         flags.append("implausible_claim: distance or pace is not believable, call them out")
