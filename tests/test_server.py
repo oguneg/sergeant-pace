@@ -138,6 +138,18 @@ def test_public_mode_hides_the_voice_tools_and_error_details(web, monkeypatch):
     assert boom.status_code == 502 and "AIza" not in boom.get_data(as_text=True)
 
 
+def test_a_failed_turn_gets_a_fresh_coach_next_time(web, monkeypatch):
+    made = []
+    monkeypatch.setattr(server, "new_coach", lambda: made.append(1) or FakeCoach())
+    c = visitor()
+    chat(c, "one")
+    chat(c, "two")
+    assert len(made) == 1                      # a healthy conversation keeps its coach
+    assert chat(c, "EXPLODE").status_code == 502
+    chat(c, "three")
+    assert len(made) == 2                      # a broken one is rebuilt, not stuck failing forever
+
+
 def test_dev_mode_still_shows_the_real_error(web, monkeypatch):
     monkeypatch.setattr(server, "PUBLIC", False)
     assert "AIza-SECRET" in chat(visitor(), "EXPLODE").json["error"]

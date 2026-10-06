@@ -63,6 +63,7 @@ RULES: never say you repeated, stepped back or advanced the plan unless you call
 Write paces as min:sec per km."""
 
 _client = None
+_client_lock = threading.Lock()
 _local = threading.local()
 
 
@@ -86,14 +87,23 @@ def traced(fn):
     return wrapper
 
 
+def client():
+    """One Gemini client for the whole process, shared by every conversation. Each Coach used to build its own and overwrite a
+    global, so when two visitors arrived together the first client was garbage collected and closed under a request in flight."""
+    global _client
+    with _client_lock:
+        if _client is None:
+            if not os.getenv("GEMINI_API_KEY"):
+                raise RuntimeError("Set GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)")
+            _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        return _client
+
+
 class Coach:
     """The sergeant: a Gemini chat with tools, which survives rate limits by switching models."""
 
     def __init__(self):
-        global _client
-        if not os.getenv("GEMINI_API_KEY"):
-            raise RuntimeError("Set GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)")
-        _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])  # kept alive, the chat doesn't own it
+        client()  # fail early, with a clear message, if there is no key
         self.model_idx = 0
         self.chat = self._make_chat()
 
@@ -102,7 +112,7 @@ class Coach:
         return MODELS[self.model_idx]
 
     def _make_chat(self, history=None):
-        return _client.chats.create(
+        return client().chats.create(
             model=self.model,
             history=history,
             config=types.GenerateContentConfig(

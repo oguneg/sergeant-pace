@@ -63,13 +63,14 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-118 tests, no API key and no network needed:
+122 tests, no API key and no network needed:
 
 - **Guardrails** (`test_guardrails.py`): properties of the limits (bounded, monotonic, continuous) and each safety rule above.
 - **Simulated careers** (`test_simulated_careers.py`): 20 random recruits through 45 random runs, skips and weigh-ins using the demo's own scenario generator, checking the rules at every step.
 - **Rollback** (`test_agent_rollback.py`): a fake model that fails mid-turn, to prove the state is restored and the retry and model-switch paths work.
 - **Public server** (`test_server.py`): visitors are isolated from each other, forged cookies never become file names, rate and daily limits refuse before the model is called, error details never leak, and hostile input (NaN, huge numbers, long messages) is clamped.
 - **Intake validation** (`test_intake_validation.py`): impossible numbers from the model are rejected, saves are atomic, and tool traces are per thread.
+- **Shared client** (`test_agent_client.py`): a regression test for a bug that only showed up with two visitors at once. Each conversation built its own Gemini client and overwrote a global, so the first was garbage collected and closed mid-request.
 
 I checked the tests catch real regressions by breaking the code on purpose: loosening the pace cap, letting the effort ceiling rise, dropping the pain words, removing the advance gap, removing rollback, allowing an advance after a bad run, removing the rate and daily limits, trusting the session cookie, sharing one state file between visitors, and leaking error text. Each one fails the suite.
 

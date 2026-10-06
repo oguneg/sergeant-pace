@@ -200,6 +200,7 @@ def turn(message: str, **extra):
             reply, trace = session.coach.send(message)
         except Exception as e:
             logging.getLogger("pace").exception("turn failed")
+            session.coach = None  # whatever went wrong, start the next turn from a fresh coach; the recruit's file is untouched
             logging.info(json.dumps({"event": "turn", "sid": g.sid[:6], "route": request.path, "ok": False,
                                      "ms": round((time.time() - started) * 1000), "error": type(e).__name__}))
             return jsonify({"error": "The sergeant is unavailable right now. Try again in a minute." if PUBLIC else str(e)}), 502
