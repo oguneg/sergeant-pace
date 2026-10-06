@@ -1,5 +1,6 @@
 import pytest
 
+import agent
 import tools
 
 
@@ -7,6 +8,7 @@ import tools
 def scratch_state(tmp_path, monkeypatch):
     """Every test gets its own empty state file, so tests never touch a real recruit's plan."""
     monkeypatch.setattr(tools, "STATE_FILE", tmp_path / "state.json")
+    agent._good.update(idx=0, at=0.0)  # which model the last conversation fell back to must not leak between tests
     tools._state_file.set(None)  # the web server pins a per-visitor file for the current thread: never let that leak between tests
 
 

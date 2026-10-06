@@ -87,6 +87,16 @@ def traced(fn):
     return wrapper
 
 
+# Free-tier quotas run out per model, so conversations walk down MODELS. Remember how far down we got: a new visitor should not
+# spend a minute retrying models that are already exhausted for the day. Try the top of the list again after an hour.
+_good = {"idx": 0, "at": 0.0}
+RETRY_TOP_AFTER = 3600
+
+
+def _start_index() -> int:
+    return _good["idx"] if time.time() - _good["at"] < RETRY_TOP_AFTER else 0
+
+
 def client():
     """One Gemini client for the whole process, shared by every conversation. Each Coach used to build its own and overwrite a
     global, so when two visitors arrived together the first client was garbage collected and closed under a request in flight."""
@@ -104,7 +114,7 @@ class Coach:
 
     def __init__(self):
         client()  # fail early, with a clear message, if there is no key
-        self.model_idx = 0
+        self.model_idx = _start_index()
         self.chat = self._make_chat()
 
     @property
@@ -127,6 +137,7 @@ class Coach:
             return False
         history = self.chat.get_history()
         self.model_idx += 1
+        _good.update(idx=self.model_idx, at=time.time())
         self.chat = self._make_chat(history)
         return True
 

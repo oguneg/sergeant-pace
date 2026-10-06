@@ -13,7 +13,7 @@ class FakeClient:
 
     def __init__(self, api_key=None):
         FakeClient.created += 1
-        self.chats = SimpleNamespace(create=lambda **kw: SimpleNamespace(kw=kw))
+        self.chats = SimpleNamespace(create=lambda **kw: SimpleNamespace(kw=kw, get_history=lambda: []))
 
 
 @pytest.fixture(autouse=True)
@@ -49,3 +49,19 @@ def test_a_missing_key_is_a_clear_error_not_a_crash(monkeypatch):
     monkeypatch.delenv("GEMINI_API_KEY")
     with pytest.raises(RuntimeError, match="GEMINI_API_KEY"):
         agent.Coach()
+
+
+def test_new_conversations_start_from_the_last_model_that_worked(monkeypatch):
+    first = agent.Coach()
+    assert first.model_idx == 0
+    first._next_model()                      # quota ran out on model 0
+    first._next_model()                      # ...and on model 1
+    assert agent.Coach().model_idx == 2      # the next visitor does not retry them
+
+
+def test_the_top_model_is_tried_again_after_an_hour(monkeypatch):
+    agent.Coach()._next_model()
+    assert agent.Coach().model_idx == 1
+    later = agent.time.time() + agent.RETRY_TOP_AFTER + 1
+    monkeypatch.setattr(agent.time, "time", lambda: later)
+    assert agent.Coach().model_idx == 0

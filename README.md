@@ -63,7 +63,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-122 tests, no API key and no network needed:
+124 tests, no API key and no network needed:
 
 - **Guardrails** (`test_guardrails.py`): properties of the limits (bounded, monotonic, continuous) and each safety rule above.
 - **Simulated careers** (`test_simulated_careers.py`): 20 random recruits through 45 random runs, skips and weigh-ins using the demo's own scenario generator, checking the rules at every step.
