@@ -38,6 +38,11 @@ RATE = {"coach": (int(os.getenv("SP_RATE_COACH", "30")), 600), "speak": (int(os.
 DAILY = {"coach": int(os.getenv("SP_DAILY_COACH", "400")), "speak": int(os.getenv("SP_DAILY_SPEAK", "300")),
          "transcribe": int(os.getenv("SP_DAILY_TRANSCRIBE", "100"))}
 
+IP_DAILY = {"coach": int(os.getenv("SP_IP_DAILY_COACH", "30")), "speak": int(os.getenv("SP_IP_DAILY_SPEAK", "40")),
+            "transcribe": int(os.getenv("SP_IP_DAILY_TRANSCRIBE", "10"))}
+UPSTREAM_COOLDOWN_S = int(os.getenv("SP_UPSTREAM_COOLDOWN_S", "90"))   # after Gemini fails, tell visitors up front for this long
+UPSTREAM = {"until": 0.0}
+
 app = Flask(__name__, static_folder="static")
 app.config["MAX_CONTENT_LENGTH"] = 9_000_000  # the biggest legitimate body is a spoken reply
 if os.getenv("SP_TRUST_PROXY") == "1":  # only behind our own reverse proxy, otherwise clients could fake their IP
@@ -55,6 +60,23 @@ class Limiter:
         self.hits = defaultdict(deque)
         self.day = None
         self.used = defaultdict(int)
+        self.ip_used = defaultdict(int)
+
+    @staticmethod
+    def _until_midnight(utc) -> int:
+        return int(((utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0) - utc).total_seconds())
+
+    def peek(self, group: str, ip: str, now: float | None = None) -> tuple[bool, int, str]:
+        """Would a call be refused for the day? Same answer as check() for the daily limits, but counts nothing."""
+        utc = datetime.fromtimestamp(now if now is not None else time.time(), timezone.utc)
+        with self.lock:
+            if utc.date() != self.day:
+                return True, 0, ""
+            if self.used[group] >= DAILY[group]:
+                return False, self._until_midnight(utc), "daily"
+            if self.ip_used[(group, ip)] >= IP_DAILY[group]:
+                return False, self._until_midnight(utc), "ip_daily"
+            return True, 0, ""
 
     def check(self, group: str, ip: str, now: float | None = None) -> tuple[bool, int, str]:
         """Returns (allowed, retry_after_seconds, reason). A refused call is not counted."""
@@ -62,10 +84,11 @@ class Limiter:
         utc = datetime.fromtimestamp(now, timezone.utc)
         with self.lock:
             if utc.date() != self.day:
-                self.day, self.used = utc.date(), defaultdict(int)
+                self.day, self.used, self.ip_used = utc.date(), defaultdict(int), defaultdict(int)
             if self.used[group] >= DAILY[group]:
-                tomorrow = (utc + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-                return False, int((tomorrow - utc).total_seconds()), "daily"
+                return False, self._until_midnight(utc), "daily"
+            if self.ip_used[(group, ip)] >= IP_DAILY[group]:
+                return False, self._until_midnight(utc), "ip_daily"
             limit, window = RATE[group]
             q = self.hits[(group, ip)]
             while q and q[0] <= now - window:
@@ -74,6 +97,7 @@ class Limiter:
                 return False, int(q[0] + window - now) + 1, "rate"
             q.append(now)
             self.used[group] += 1
+            self.ip_used[(group, ip)] += 1
             if len(self.hits) > 5000:  # forget clients that went quiet
                 for k in [k for k, v in self.hits.items() if not v or v[-1] <= now - 3600]:
                     del self.hits[k]
@@ -81,8 +105,10 @@ class Limiter:
 
 
 limiter = Limiter()
-OFF_DUTY = {"daily": "Sergeant Pace is off duty for today, recruit. Report back tomorrow.",
-            "rate": "Easy, recruit. You are asking for too much, too fast. Catch your breath and try again in {mins} min."}
+OFF_DUTY = {"daily": "Sergeant Pace is off duty for today, recruit. The site's daily budget is spent. Report back tomorrow, it resets at midnight UTC.",
+            "ip_daily": "You have used your {n} turns for today, recruit. Report back tomorrow.",
+            "rate": "Easy, recruit. You are asking for too much, too fast. Catch your breath and try again in {mins} min.",
+            "upstream": "The sergeant's AI is overloaded right now, recruit. Try again in a few minutes."}
 
 
 def limited(group: str):
@@ -92,7 +118,7 @@ def limited(group: str):
         def inner(*args, **kwargs):
             ok, retry, reason = limiter.check(group, request.remote_addr or "?")
             if not ok:
-                resp = jsonify({"error": OFF_DUTY[reason].format(mins=max(1, math.ceil(retry / 60))), "reason": reason})
+                resp = jsonify({"error": OFF_DUTY[reason].format(mins=max(1, math.ceil(retry / 60)), n=IP_DAILY[group]), "reason": reason})
                 resp.status_code = 429
                 resp.headers["Retry-After"] = str(retry)
                 return resp
@@ -169,14 +195,26 @@ def finish(resp):
 
 # ---------- views ----------
 
+def status_view() -> dict:
+    """Can this visitor get an answer right now? Shown on the first screen so nobody fills in a form just to be refused."""
+    ok, retry, reason = limiter.peek("coach", request.remote_addr or "?")
+    if not ok:
+        return {"available": False, "reason": reason, "retry_after": retry, "message": OFF_DUTY[reason].format(n=IP_DAILY["coach"], mins=1)}
+    left = UPSTREAM["until"] - time.time()
+    if left > 0:
+        return {"available": False, "reason": "upstream", "retry_after": int(left) + 1, "message": OFF_DUTY["upstream"]}
+    return {"available": True}
+
+
 def state_view() -> dict:
     state = tools.load_state()
     if not state:
-        return {"onboarded": False, "public": PUBLIC, "free_tier": not PAID_GEMINI}
+        return {"onboarded": False, "public": PUBLIC, "free_tier": not PAID_GEMINI, "status": status_view()}
     return {
         "onboarded": True,
         "public": PUBLIC,
         "free_tier": not PAID_GEMINI,
+        "status": status_view(),
         "easy_pace": tools.fmt_pace(state["easy_pace"]),
         "pace_limit": tools.fmt_pace(tools.pace_limit(state)),
         "ladder": [{"name": n, "km": km} for n, km in tools.LADDER],
@@ -205,9 +243,15 @@ def turn(message: str, **extra):
         except Exception as e:
             logging.getLogger("pace").exception("turn failed")
             session.coach = None  # whatever went wrong, start the next turn from a fresh coach; the recruit's file is untouched
+            kind = agent.kind_of(e)
             logging.info(json.dumps({"event": "turn", "sid": g.sid[:6], "route": request.path, "ok": False,
-                                     "ms": round((time.time() - started) * 1000), "error": type(e).__name__}))
+                                     "ms": round((time.time() - started) * 1000), "error": type(e).__name__, "kind": kind}))
+            if kind in ("quota", "slow", "busy"):
+                UPSTREAM["until"] = time.time() + UPSTREAM_COOLDOWN_S   # the next visitors are told before they start typing
+                if PUBLIC:
+                    return jsonify({"error": OFF_DUTY["upstream"], "reason": "upstream"}), 503
             return jsonify({"error": "The sergeant is unavailable right now. Try again in a minute." if PUBLIC else str(e)}), 502
+        UPSTREAM["until"] = 0.0   # a success proves Gemini is answering again
         logging.info(json.dumps({"event": "turn", "sid": g.sid[:6], "route": request.path, "ok": True, "model": session.coach.model,
                                  "ms": round((time.time() - started) * 1000), "tools": [t["tool"] for t in trace]}))
         return jsonify({"reply": reply, "trace": trace, "model": session.coach.model, "state": state_view(),

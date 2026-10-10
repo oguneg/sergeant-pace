@@ -9,12 +9,15 @@ services:
     env_file: .env
     environment:
       SP_TRUST_PROXY: "1"   # the real client IP comes from Caddy's X-Forwarded-For; only Caddy can reach this container
-      # Free-tier Gemini keys allow about 20 requests a day per model, and one coach turn can use several, so the daily caps
-      # are small. Raise them in .env once the key is on a paid plan.
-      SP_DAILY_COACH: "${SP_DAILY_COACH:-60}"
-      SP_DAILY_SPEAK: "${SP_DAILY_SPEAK:-40}"
-      SP_DAILY_TRANSCRIBE: "${SP_DAILY_TRANSCRIBE:-20}"
-      SP_RATE_COACH: "${SP_RATE_COACH:-15}"
+      # Site-wide daily caps and a per-visitor daily allowance. On a free Gemini key the real limit is Google's quota, not these numbers:
+      # when Gemini is struggling the app says so up front instead of letting visitors fill in a form first.
+      SP_DAILY_COACH: "${SP_DAILY_COACH:-200}"
+      SP_DAILY_SPEAK: "${SP_DAILY_SPEAK:-120}"
+      SP_DAILY_TRANSCRIBE: "${SP_DAILY_TRANSCRIBE:-60}"
+      SP_RATE_COACH: "${SP_RATE_COACH:-20}"
+      SP_IP_DAILY_COACH: "${SP_IP_DAILY_COACH:-30}"       # per visitor per day, so one person cannot drain the shared budget
+      SP_IP_DAILY_SPEAK: "${SP_IP_DAILY_SPEAK:-40}"
+      SP_IP_DAILY_TRANSCRIBE: "${SP_IP_DAILY_TRANSCRIBE:-10}"
       SP_GEMINI_PAID: "${SP_GEMINI_PAID:-0}"   # the privacy notice describes Google's free or paid terms; only set 1 for a paid key
     logging:               # logs hold visitors' IP addresses, so they are rotated by size and never pile up
       driver: json-file

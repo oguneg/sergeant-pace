@@ -326,3 +326,8 @@ a.tab { text-decoration: none; display: inline-block; }
   .tab { padding: 9px 10px; font-size: 12px; letter-spacing: 0.08em; margin-left: 0; }
   .bar .tab:first-of-type { margin-left: auto; }
 }
+
+/* ---------- status banner: the sergeant cannot answer right now ---------- */
+.banner { background: var(--amber); color: var(--rule); padding: 12px clamp(16px, 3vw, 40px); font: 600 17px/1.4 var(--form); border-bottom: 3px solid var(--rule); }
+.banner .link { color: var(--rule); margin-left: 8px; }
+.choice[disabled] { opacity: 0.45; cursor: not-allowed; }

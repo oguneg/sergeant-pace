@@ -162,6 +162,20 @@ function recordRows() {
   ];
 }
 
+// Tell people up front when the sergeant cannot answer (daily budget spent, Google overloaded), before they fill in anything.
+const unavailable = () => !!(S.meta && S.meta.status && S.meta.status.available === false);
+function showStatus() {
+  const b = $('#banner'), st = S.meta && S.meta.status;
+  if (!st || st.available !== false) { b.hidden = true; return; }
+  b.innerHTML = `<span>${esc(st.message)}</span> <button class="link" id="recheck">Check again</button>`;
+  b.hidden = false;
+  $('#recheck').addEventListener('click', async () => {
+    try { S.meta = await (await fetch('/api/state')).json(); } catch (e) { /* stay as we are */ }
+    showStatus();
+    if (!S.current) viewIntake();
+  });
+}
+
 // Explicit consent for health data: nothing leaves the browser until this is ticked on the last step.
 function consentHtml() {
   const free = !S.meta || S.meta.free_tier !== false;
@@ -174,8 +188,8 @@ function viewIntake() {
   let controls;
   if (id === 'can') {
     controls = `<div class="choices">
-      <button class="choice" data-can="no">${box('red')}<span><b>Cannot run</b><span class="d">Not yet. Everyone starts somewhere.</span></span></button>
-      <button class="choice" data-can="yes">${box('red')}<span><b>Can run a little</b><span class="d">I can jog for a few minutes.</span></span></button></div>
+      <button class="choice" data-can="no" ${unavailable() ? 'disabled' : ''}>${box('red')}<span><b>Cannot run</b><span class="d">Not yet. Everyone starts somewhere.</span></span></button>
+      <button class="choice" data-can="yes" ${unavailable() ? 'disabled' : ''}>${box('red')}<span><b>Can run a little</b><span class="d">I can jog for a few minutes.</span></span></button></div>
       <p class="fine">Nothing leaves your browser until you report for duty. <a href="/privacy" target="_blank" rel="noopener">Privacy notice</a></p>`;
   } else {
     controls = `<form id="f" novalidate><div class="fields">${st.fields.map(([k, label, type, ph, at]) => `
@@ -662,7 +676,7 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#fil
 
 /* ============================================================ BOOT */
 fetch('/api/state').then((r) => r.json()).then((s) => {
-  S.meta = s;
+  S.meta = s; showStatus();
   if (s.onboarded) { S.current = s; renderBar(); afterSession(); } else viewIntake();
 }).catch(() => viewIntake());
 })();

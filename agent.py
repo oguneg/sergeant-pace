@@ -62,6 +62,8 @@ ANY OTHER MESSAGE is the recruit talking to you: answer as the coach, briefly. C
 RULES: never say you repeated, stepped back or advanced the plan unless you called adjust_plan in this same turn, and it said applied. If you did not call it, the plan simply continues. Only quote numbers returned by tools. Never schedule or edit the plan yourself, tools do that.
 Write paces as min:sec per km."""
 
+REQUEST_TIMEOUT_S = int(os.getenv("SP_REQUEST_TIMEOUT_S", "20"))   # one call to Gemini
+TURN_BUDGET_S = int(os.getenv("SP_TURN_BUDGET_S", "55"))            # a whole coach turn, across retries and model switches
 _client = None
 _client_lock = threading.Lock()
 _local = threading.local()
@@ -76,6 +78,19 @@ def _trace() -> list:
 # Free-tier quotas are per model and tiny (20 requests/day), so fall through the list when one runs out.
 MODELS = [m for m in [os.getenv("GEMINI_MODEL"), "gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash",
                       "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"] if m]
+
+
+def kind_of(error) -> str:
+    """What went wrong upstream: quota (rate limit or daily limit, or a model that is gone), slow (timed out), busy (5xx) or other."""
+    err = f"{type(error).__name__} {error}"
+    low = err.lower()
+    if "RESOURCE_EXHAUSTED" in err or "NOT_FOUND" in err or " 429" in err or "429 " in err:
+        return "quota"
+    if isinstance(error, TimeoutError) or "timed out" in low or "timeout" in low or "DEADLINE_EXCEEDED" in err:
+        return "slow"
+    if any(c in err for c in ("503", "500", "502", "504", "UNAVAILABLE")):
+        return "busy"
+    return "other"
 
 
 def traced(fn):
@@ -105,7 +120,10 @@ def client():
         if _client is None:
             if not os.getenv("GEMINI_API_KEY"):
                 raise RuntimeError("Set GEMINI_API_KEY in .env (free key: https://aistudio.google.com/apikey)")
-            _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            # The SDK's default is 5 attempts with exponential backoff and no timeout: on a rate-limited model that silently waits
+            # for minutes, so the visitor's connection dies long before our own fallback to another model can run. Fail fast instead.
+            _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"], http_options=types.HttpOptions(
+                timeout=REQUEST_TIMEOUT_S * 1000, retry_options=types.HttpRetryOptions(attempts=1)))
         return _client
 
 
@@ -142,8 +160,9 @@ class Coach:
         return True
 
     def send(self, text: str, on_note=None):
-        """Returns (reply, tool_trace). Retries busy errors, switches model on quota errors, raises otherwise."""
-        busy = 0
+        """Returns (reply, tool_trace). Retries busy errors, switches model on quota or timeout errors, raises otherwise.
+        A turn never takes longer than TURN_BUDGET_S: past that the error is raised and the visitor is told, not left waiting."""
+        busy, started = 0, time.monotonic()
         snapshot = tools.load_state()  # tools have side effects, so a failed turn must be rolled back before replaying it
         while True:
             _trace().clear()
@@ -154,16 +173,16 @@ class Coach:
                 return reply, list(_trace())
             except Exception as e:
                 tools.save_state(snapshot) if snapshot else tools.reset_state()
-                err = str(e)
-                quota = "RESOURCE_EXHAUSTED" in err or "NOT_FOUND" in err
-                busy_err = any(c in err for c in ("503", "500", "UNAVAILABLE"))
-                if busy_err and busy < 2:
+                kind = kind_of(e)
+                if time.monotonic() - started > TURN_BUDGET_S:
+                    raise
+                if kind == "busy" and busy < 2:
                     busy += 1
                     if on_note:
                         on_note(f"Gemini is busy, retrying ({busy}/2)")
                     time.sleep(2 * busy)
                     continue
-                if (quota or busy_err) and self._next_model():
+                if kind in ("quota", "slow", "busy") and self._next_model():
                     busy = 0
                     if on_note:
                         on_note(f"switched to {self.model}")

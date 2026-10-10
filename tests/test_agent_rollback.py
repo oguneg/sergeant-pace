@@ -93,3 +93,51 @@ def test_running_out_of_models_raises_instead_of_looping():
     coach.model_idx = len(agent.MODELS) - 1
     with pytest.raises(RuntimeError):
         coach.send("hello")
+
+
+# ---------- a slow model is as bad as a broken one ----------
+
+@pytest.mark.parametrize("error,kind", [
+    (RuntimeError("429 RESOURCE_EXHAUSTED. quota"), "quota"), (RuntimeError("404 NOT_FOUND model gone"), "quota"),
+    (TimeoutError("took too long"), "slow"), (RuntimeError("The read operation timed out"), "slow"), (RuntimeError("504 DEADLINE_EXCEEDED"), "slow"),
+    (RuntimeError("503 UNAVAILABLE"), "busy"), (RuntimeError("500 INTERNAL"), "busy"),
+    (ValueError("bad request"), "other"),
+])
+def test_upstream_errors_are_classified(error, kind):
+    assert agent.kind_of(error) == kind
+
+
+def test_a_timed_out_model_is_abandoned_for_the_next_one():
+    onboard()
+    first = FakeChat([_do_then_fail(lambda: tools.skip_run("x"), RuntimeError("The read operation timed out"))])
+    second = FakeChat([lambda: None])
+    coach = make_coach(first, [second])
+    reply, _ = coach.send("hello")
+    assert coach.model_idx == 1 and coach.chat is second and reply == "Move it, recruit."
+    assert tools.load_state()["history"] == []          # the half-finished attempt was rolled back first
+
+
+def test_a_turn_stops_at_its_time_budget_instead_of_walking_every_model(monkeypatch):
+    onboard()
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(agent.time, "monotonic", lambda: clock["t"])
+
+    class Slow:
+        def __init__(self):
+            self.calls = 0
+
+        def send_message(self, text):
+            self.calls += 1
+            clock["t"] += agent.REQUEST_TIMEOUT_S           # each attempt burns its full timeout
+            raise TimeoutError("timed out")
+
+        def get_history(self):
+            return []
+
+    chats = [Slow() for _ in range(6)]
+    coach = make_coach(chats[0], chats[1:])
+    with pytest.raises(TimeoutError):
+        coach.send("hello")
+    attempts = sum(c.calls for c in chats)
+    assert attempts * agent.REQUEST_TIMEOUT_S <= agent.TURN_BUDGET_S + agent.REQUEST_TIMEOUT_S   # bounded, not all six models
+    assert tools.load_state()["history"] == []

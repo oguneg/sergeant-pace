@@ -11,8 +11,11 @@ import agent
 class FakeClient:
     created = 0
 
-    def __init__(self, api_key=None):
+    options = None
+
+    def __init__(self, api_key=None, http_options=None):
         FakeClient.created += 1
+        FakeClient.options = http_options
         self.chats = SimpleNamespace(create=lambda **kw: SimpleNamespace(kw=kw, get_history=lambda: []))
 
 
@@ -65,3 +68,11 @@ def test_the_top_model_is_tried_again_after_an_hour(monkeypatch):
     later = agent.time.time() + agent.RETRY_TOP_AFTER + 1
     monkeypatch.setattr(agent.time, "time", lambda: later)
     assert agent.Coach().model_idx == 0
+
+
+def test_the_client_fails_fast_instead_of_retrying_for_minutes():
+    """The SDK default is 5 attempts with exponential backoff and no timeout, which stalled visitors for 70 to 144 seconds."""
+    agent.client()
+    opts = FakeClient.options
+    assert opts.retry_options.attempts == 1
+    assert opts.timeout == agent.REQUEST_TIMEOUT_S * 1000 and agent.REQUEST_TIMEOUT_S <= 30
