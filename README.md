@@ -65,7 +65,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-159 tests, no API key and no network needed:
+175 tests, no API key and no network needed:
 
 - **Guardrails** (`test_guardrails.py`): properties of the limits (bounded, monotonic, continuous) and each safety rule above.
 - **Simulated careers** (`test_simulated_careers.py`): 20 random recruits through 45 random runs, skips and weigh-ins using the demo's own scenario generator, checking the rules at every step.
@@ -99,6 +99,7 @@ The web server calls a paid model API, so it is built to be left on the open int
 - **Spending limits.** Each client IP gets a sliding-window limit per kind of call (20 coach turns per 10 minutes in the Docker setup), a **daily allowance of its own** (30 coach turns, 40 voice clips, 10 transcriptions) so one person cannot drain the shared budget, and the whole site has a daily cap (200 coach turns, 120 clips, 60 transcriptions). Refused calls never reach the model and answer in character with a `429` and `Retry-After`. All limits are environment variables, see `.env.example`.
 - **Told up front.** `/api/state` carries an availability status, and the page shows a banner (and disables the start buttons) before anyone fills in the form when the daily budget is spent, the visitor's own allowance is used, or Google's AI is struggling.
 - **Bounded waits.** The Gemini client does not retry on its own and each request times out after 20 s (the SDK default is 5 attempts with exponential backoff and no timeout, which stalled visitors for minutes). A slow model is abandoned like an exhausted one, and a whole turn is capped at 55 s.
+- **No false claims.** Each action (intake, run report, weigh-in, skip) must produce its tool call. A weaker model once answered "I've stepped you back" without calling anything, so a reply lacking the call is discarded, the model is reminded once, and a second miss is an honest error ("Nothing was recorded").
 - **Nothing sensitive leaks.** Upstream errors are logged and replaced by a generic message. The voice picker and its global voice setting are hidden. Everyone gets the issued voice.
 - **Bounded resources.** Chat messages are clipped, numbers from the client are clamped, request bodies are capped, idle conversations are evicted from memory (their files stay), state files expire after 14 days, and the text-to-speech cache stops growing at 300 MB.
 - **One log line per turn** as JSON: visitor, route, model, latency, tools called, success or failure.
