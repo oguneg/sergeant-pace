@@ -1,4 +1,6 @@
 import functools
+import json
+import logging
 import os
 import threading
 import time
@@ -62,6 +64,7 @@ ANY OTHER MESSAGE is the recruit talking to you: answer as the coach, briefly. C
 RULES: never say you repeated, stepped back or advanced the plan unless you called adjust_plan in this same turn, and it said applied. If you did not call it, the plan simply continues. Only quote numbers returned by tools. Never schedule or edit the plan yourself, tools do that.
 Write paces as min:sec per km."""
 
+log = logging.getLogger("pace")
 REQUEST_TIMEOUT_S = int(os.getenv("SP_REQUEST_TIMEOUT_S", "20"))   # one call to Gemini
 TURN_BUDGET_S = int(os.getenv("SP_TURN_BUDGET_S", "55"))            # a whole coach turn, across retries and model switches
 _client = None
@@ -123,11 +126,12 @@ def client():
             # The SDK's default is 5 attempts with exponential backoff and no timeout: on a rate-limited model that silently waits
             # for minutes, so the visitor's connection dies long before our own fallback to another model can run. Fail fast instead.
             _client = genai.Client(api_key=os.environ["GEMINI_API_KEY"], http_options=types.HttpOptions(
-                timeout=REQUEST_TIMEOUT_S * 1000, retry_options=types.HttpRetryOptions(attempts=1)))
+                timeout=max(REQUEST_TIMEOUT_S, MIN_DEADLINE_S) * 1000, retry_options=types.HttpRetryOptions(attempts=1)))
         return _client
 
 
-PROBE_TIMEOUT_S = 8
+MIN_DEADLINE_S = 10   # the Gemini API rejects any request deadline shorter than this with a 400
+PROBE_TIMEOUT_S = 12
 REPROBE_EVERY_S = int(RETRY_TOP_AFTER * 0.8)   # always before the remembered choice would expire and send a visitor back to the top
 
 
@@ -137,7 +141,8 @@ def _probe(model: str) -> bool:
         client().models.generate_content(model=model, contents="Reply with the word ok.", config=types.GenerateContentConfig(
             max_output_tokens=8, http_options=types.HttpOptions(timeout=PROBE_TIMEOUT_S * 1000, retry_options=types.HttpRetryOptions(attempts=1))))
         return True
-    except Exception:
+    except Exception as e:
+        log.info(json.dumps({"event": "probe", "model": model, "ok": False, "kind": kind_of(e), "error": type(e).__name__}))   # never fail silently
         return False
 
 
@@ -146,7 +151,9 @@ def probe_models() -> int | None:
     for i, model in enumerate(MODELS):
         if _probe(model):
             _good.update(idx=i, at=time.time())
+            log.info(json.dumps({"event": "probe", "chosen": model, "index": i}))
             return i
+    log.info(json.dumps({"event": "probe", "chosen": None}))
     return None
 
 

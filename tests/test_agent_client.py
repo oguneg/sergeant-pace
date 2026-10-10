@@ -116,5 +116,21 @@ def test_the_background_loop_probes_then_waits_and_stops_on_request(monkeypatch)
     assert not t.is_alive() and len(calls) >= 2                                  # at startup and again after the pause
 
 
-def test_the_probe_cannot_stall_for_minutes(monkeypatch):
-    assert agent.PROBE_TIMEOUT_S <= 10 and agent.REPROBE_EVERY_S < agent.RETRY_TOP_AFTER
+def test_the_probe_cannot_stall_for_minutes():
+    assert agent.PROBE_TIMEOUT_S <= 20 and agent.REPROBE_EVERY_S < agent.RETRY_TOP_AFTER
+
+
+def test_no_deadline_is_shorter_than_the_api_allows():
+    """Gemini answers 400 'deadline too short' below 10 s. An 8 s probe timeout once made every probe fail, and silently."""
+    assert agent.MIN_DEADLINE_S == 10
+    assert agent.PROBE_TIMEOUT_S >= agent.MIN_DEADLINE_S and agent.REQUEST_TIMEOUT_S >= agent.MIN_DEADLINE_S
+    agent.client()
+    assert FakeClient.options.timeout >= agent.MIN_DEADLINE_S * 1000
+
+
+def test_a_failed_probe_says_why(monkeypatch, caplog):
+    monkeypatch.setattr(agent, "client", lambda: SimpleNamespace(models=SimpleNamespace(
+        generate_content=lambda **kw: (_ for _ in ()).throw(RuntimeError("400 INVALID_ARGUMENT deadline too short")))))
+    with caplog.at_level("INFO", logger="pace"):
+        assert agent._probe("gemini-3.8-flash") is False
+    assert any('"event": "probe"' in r.getMessage() and '"ok": false' in r.getMessage() for r in caplog.records)
