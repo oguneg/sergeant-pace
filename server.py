@@ -229,7 +229,7 @@ def state_view() -> dict:
     }
 
 
-def turn(message: str, **extra):
+def turn(message: str, require: str | None = None, **extra):
     session = get_session(g.sid)
     with session.lock:
         prior = state_view()
@@ -238,13 +238,15 @@ def turn(message: str, **extra):
         try:
             if session.coach is None:
                 session.coach = new_coach()
-            reply, trace = session.coach.send(message)
+            reply, trace = session.coach.send(message, require=require)
         except Exception as e:
             logging.getLogger("pace").exception("turn failed")
             session.coach = None  # whatever went wrong, start the next turn from a fresh coach; the recruit's file is untouched
             kind = agent.kind_of(e)
             logging.info(json.dumps({"event": "turn", "sid": g.sid[:6], "route": request.path, "ok": False,
                                      "ms": round((time.time() - started) * 1000), "error": type(e).__name__, "kind": kind}))
+            if isinstance(e, agent.MissingToolCall):   # the model talked without doing the work: say so, never show its claim
+                return jsonify({"error": "The sergeant lost your paperwork, recruit. Nothing was recorded. Please try that again.", "reason": "missing_tool"}), 502
             if kind in ("quota", "slow", "busy"):
                 UPSTREAM["until"] = time.time() + UPSTREAM_COOLDOWN_S   # the next visitors are told before they start typing
                 if PUBLIC:
@@ -344,7 +346,7 @@ def post_chat():
     message = str(body_json().get("message", "")).strip()[:MAX_CHAT_CHARS]
     if not message:
         return jsonify({"error": "Say something, recruit."}), 400
-    return turn(message)
+    return turn(message, require="save_profile" if message.startswith("[Intake form submitted]") else None)
 
 
 @app.post("/api/run")
@@ -357,7 +359,7 @@ def post_run():
     form = {"completed": number(body.get("completed")), "effort": int(number(body.get("effort"), 5, 1, 10)),
             "distance_km": number(body.get("distance_km")), "duration_min": number(body.get("duration_min")),
             "notes": str(body.get("notes", "")).strip()[:300]}
-    return turn(sim.report_message(s, form))
+    return turn(sim.report_message(s, form), require="log_run")
 
 
 @app.post("/api/weighin")
@@ -367,7 +369,7 @@ def post_weighin():
     if not state:
         return jsonify({"error": "Finish the intake form first, recruit."}), 400
     body = body_json()
-    return turn(sim.weighin_message(number(body.get("weight_kg")), number(body.get("body_fat_pct"))))
+    return turn(sim.weighin_message(number(body.get("weight_kg")), number(body.get("body_fat_pct"))), require="log_weighin")
 
 
 @app.post("/api/weighin/skip")
@@ -382,7 +384,7 @@ def post_skip():
     s = next_session()
     if not s:
         return jsonify({"error": "Finish the intake form first, recruit."}), 400
-    return turn(sim.skip_message(s, str(body_json().get("notes", "")).strip()[:300]))
+    return turn(sim.skip_message(s, str(body_json().get("notes", "")).strip()[:300]), require="skip_run")
 
 
 @app.post("/api/sim")
@@ -394,7 +396,7 @@ def post_sim():
     s = state["upcoming"][0]
     form = sim.sim_form(state, body_json().get("scenario"))
     text = sim.report_message(s, form) if form else sim.skip_message(s, "felt lazy")
-    return turn(text, sent=text)
+    return turn(text, require="log_run" if form else "skip_run", sent=text)
 
 
 @app.get("/ad")

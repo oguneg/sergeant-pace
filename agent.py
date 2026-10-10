@@ -83,6 +83,10 @@ MODELS = [m for m in [os.getenv("GEMINI_MODEL"), "gemini-3.8-flash", "gemini-3.7
                       "gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash"] if m]
 
 
+class MissingToolCall(RuntimeError):
+    """The model answered without making the tool call this message required, so whatever it says about what happened is not true."""
+
+
 def kind_of(error) -> str:
     """What went wrong upstream: quota (rate limit or daily limit, or a model that is gone), slow (timed out), busy (5xx) or other."""
     err = f"{type(error).__name__} {error}"
@@ -202,18 +206,34 @@ class Coach:
         self.chat = self._make_chat(history)
         return True
 
-    def send(self, text: str, on_note=None):
+    def send(self, text: str, on_note=None, require: str | None = None):
         """Returns (reply, tool_trace). Retries busy errors, switches model on quota or timeout errors, raises otherwise.
-        A turn never takes longer than TURN_BUDGET_S: past that the error is raised and the visitor is told, not left waiting."""
-        busy, started = 0, time.monotonic()
+        A turn never takes longer than TURN_BUDGET_S: past that the error is raised and the visitor is told, not left waiting.
+
+        `require` names a tool this message cannot be answered without (log_run for a run report, and so on). A weaker model
+        sometimes answers in character and claims it logged the run or changed the plan without calling anything, so a reply
+        that lacks the call is never returned: the model is reminded once, and a second miss raises MissingToolCall."""
+        busy, started, reminded, message = 0, time.monotonic(), False, text
         snapshot = tools.load_state()  # tools have side effects, so a failed turn must be rolled back before replaying it
         while True:
             _trace().clear()
             try:
-                resp = self.chat.send_message(text)
+                resp = self.chat.send_message(message)
                 parts = resp.candidates[0].content.parts if resp.candidates else []
                 reply = "".join(p.text for p in parts if getattr(p, "text", None)) or "..."
-                return reply, list(_trace())
+                calls = list(_trace())
+                if require and not any(c["tool"] == require for c in calls):
+                    tools.save_state(snapshot) if snapshot else tools.reset_state()
+                    log.info(json.dumps({"event": "missing_tool", "tool": require, "model": self.model, "reminded": reminded}))
+                    if reminded:
+                        raise MissingToolCall(require)
+                    reminded = True
+                    message = (f"[System check] You did not call {require}, so nothing was recorded and what you just said is not true. "
+                               f"Call {require} now with exactly the values from the previous message, then answer in character.")
+                    continue
+                return reply, calls
+            except MissingToolCall:
+                raise
             except Exception as e:
                 tools.save_state(snapshot) if snapshot else tools.reset_state()
                 kind = kind_of(e)

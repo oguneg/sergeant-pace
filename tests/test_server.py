@@ -14,7 +14,7 @@ class FakeCoach:
     model = "fake-model"
     sent: list = []
 
-    def send(self, text, on_note=None):
+    def send(self, text, on_note=None, require=None):
         FakeCoach.sent.append(text)
         if text.startswith("[Intake") and not tools.load_state():
             tools.save_profile(age=30, weight_kg=85, height_cm=178, body_fat_pct=26, longest_run_km=0, pace_min_per_km=0)

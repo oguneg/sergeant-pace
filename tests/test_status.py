@@ -4,15 +4,20 @@ import time
 
 import pytest
 
+import agent
 import server
 import tools
 
 
 class FakeCoach:
     model = "fake-model"
-    mode = "ok"            # ok | timeout | quota | other
+    mode = "ok"            # ok | timeout | quota | other | missing
+    requires: list = []
 
-    def send(self, text, on_note=None):
+    def send(self, text, on_note=None, require=None):
+        FakeCoach.requires.append(require)
+        if FakeCoach.mode == "missing":
+            raise agent.MissingToolCall(require)
         if text.startswith("[Intake") and not tools.load_state():
             tools.save_profile(age=30, weight_kg=85, height_cm=178, body_fat_pct=26, longest_run_km=0, pace_min_per_km=0)
         if FakeCoach.mode == "timeout":
@@ -37,6 +42,7 @@ def web(tmp_path, monkeypatch):
     monkeypatch.setattr(server, "PUBLIC", True)
     monkeypatch.setitem(server.UPSTREAM, "until", 0.0)
     FakeCoach.mode = "ok"
+    FakeCoach.requires = []
     return server
 
 
@@ -150,3 +156,27 @@ def test_a_budget_of_zero_means_closed_even_before_anything_was_used(monkeypatch
     monkeypatch.setitem(server.DAILY, "coach", 0)
     ok, retry, reason = server.Limiter().peek("coach", "1.1.1.1")
     assert (ok, reason) == (False, "daily") and retry > 0
+
+
+# ---------- every action must produce its tool call, and the page is told when it did not ----------
+
+def test_each_route_asks_for_the_tool_that_proves_the_work_was_done(web):
+    c = visitor()
+    chat(c, "[Intake form submitted] Age: 30 ...")
+    c.post("/api/run", json={"completed": 3, "effort": 5})
+    c.post("/api/weighin", json={"weight_kg": 84, "body_fat_pct": 25})
+    c.post("/api/skip", json={"notes": ""})
+    c.post("/api/sim", json={"scenario": "good"})
+    c.post("/api/sim", json={"scenario": "skip"})
+    chat(c, "is it ok to run in the rain?")
+    assert FakeCoach.requires == ["save_profile", "log_run", "log_weighin", "skip_run", "log_run", "skip_run", None]
+
+
+def test_a_missing_tool_call_is_an_honest_error_and_not_a_google_outage(web):
+    c = visitor()
+    chat(c, "[Intake form submitted] Age: 30 ...")
+    FakeCoach.mode = "missing"
+    r = c.post("/api/run", json={"completed": 3, "effort": 5})
+    assert r.status_code == 502 and r.json["reason"] == "missing_tool" and "paperwork" in r.json["error"]
+    assert "Nothing was recorded" in r.json["error"]
+    assert status(visitor("2.2.2.2")) == {"available": True}               # one forgetful reply does not close the site
