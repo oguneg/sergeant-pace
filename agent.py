@@ -127,6 +127,42 @@ def client():
         return _client
 
 
+PROBE_TIMEOUT_S = 8
+REPROBE_EVERY_S = int(RETRY_TOP_AFTER * 0.8)   # always before the remembered choice would expire and send a visitor back to the top
+
+
+def _probe(model: str) -> bool:
+    """One tiny request: does this model answer quickly right now? A throttled model that would hold a visitor for a minute counts as no."""
+    try:
+        client().models.generate_content(model=model, contents="Reply with the word ok.", config=types.GenerateContentConfig(
+            max_output_tokens=8, http_options=types.HttpOptions(timeout=PROBE_TIMEOUT_S * 1000, retry_options=types.HttpRetryOptions(attempts=1))))
+        return True
+    except Exception:
+        return False
+
+
+def probe_models() -> int | None:
+    """Find the first model that answers quickly and remember it, so no visitor pays for the search."""
+    for i, model in enumerate(MODELS):
+        if _probe(model):
+            _good.update(idx=i, at=time.time())
+            return i
+    return None
+
+
+def maintain_models(stop: threading.Event, every: float = REPROBE_EVERY_S) -> None:
+    """Probe at startup and then regularly: a throttled top model is found, and a recovered one is picked up again, in the background."""
+    while not stop.is_set():
+        probe_models()
+        stop.wait(every)
+
+
+def start_warmup() -> threading.Event:
+    stop = threading.Event()
+    threading.Thread(target=maintain_models, args=(stop,), name="model-probe", daemon=True).start()
+    return stop
+
+
 class Coach:
     """The sergeant: a Gemini chat with tools, which survives rate limits by switching models."""
 

@@ -1,6 +1,7 @@
 """Regression for a bug that only appears with two visitors at once: each conversation built its own Gemini client and overwrote a
 shared global, so the first client was garbage collected and closed while its request was still running."""
 import threading
+import time
 from types import SimpleNamespace
 
 import pytest
@@ -76,3 +77,44 @@ def test_the_client_fails_fast_instead_of_retrying_for_minutes():
     opts = FakeClient.options
     assert opts.retry_options.attempts == 1
     assert opts.timeout == agent.REQUEST_TIMEOUT_S * 1000 and agent.REQUEST_TIMEOUT_S <= 30
+
+
+# ---------- finding the fast model before a visitor has to ----------
+
+def test_probing_skips_slow_models_and_remembers_the_first_fast_one(monkeypatch):
+    answers = {"gemini-3.8-flash": False, "gemini-3.7-flash": False}          # throttled: would hold a visitor for a minute
+    monkeypatch.setattr(agent, "_probe", lambda m: answers.get(m, True))
+    assert agent.probe_models() == 2 and agent.MODELS[2] == "gemini-3.6-flash"
+    assert agent.Coach().model_idx == 2                                         # the first visitor starts there, not at the top
+
+
+def test_probing_reports_nothing_when_every_model_is_down(monkeypatch):
+    monkeypatch.setattr(agent, "_probe", lambda m: False)
+    assert agent.probe_models() is None
+
+
+def test_a_recovered_top_model_is_picked_up_in_the_background(monkeypatch):
+    state = {"top_ok": False}
+    monkeypatch.setattr(agent, "_probe", lambda m: m != agent.MODELS[0] or state["top_ok"])
+    agent.probe_models()
+    assert agent.Coach().model_idx == 1
+    state["top_ok"] = True
+    agent.probe_models()
+    assert agent.Coach().model_idx == 0
+
+
+def test_the_background_loop_probes_then_waits_and_stops_on_request(monkeypatch):
+    import threading
+    calls = []
+    monkeypatch.setattr(agent, "probe_models", lambda: calls.append(1))
+    stop = threading.Event()
+    t = threading.Thread(target=agent.maintain_models, args=(stop, 0.05))
+    t.start()
+    time.sleep(0.25)
+    stop.set()
+    t.join(2)
+    assert not t.is_alive() and len(calls) >= 2                                  # at startup and again after the pause
+
+
+def test_the_probe_cannot_stall_for_minutes(monkeypatch):
+    assert agent.PROBE_TIMEOUT_S <= 10 and agent.REPROBE_EVERY_S < agent.RETRY_TOP_AFTER

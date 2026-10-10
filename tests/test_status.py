@@ -144,3 +144,9 @@ def test_upstream_failures_are_logged_with_their_kind(web, caplog):
     with caplog.at_level("INFO"):
         chat(visitor())
     assert any('"kind": "slow"' in r.getMessage() for r in caplog.records)
+
+
+def test_a_budget_of_zero_means_closed_even_before_anything_was_used(monkeypatch):
+    monkeypatch.setitem(server.DAILY, "coach", 0)
+    ok, retry, reason = server.Limiter().peek("coach", "1.1.1.1")
+    assert (ok, reason) == (False, "daily") and retry > 0

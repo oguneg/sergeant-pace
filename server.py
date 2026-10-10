@@ -70,11 +70,10 @@ class Limiter:
         """Would a call be refused for the day? Same answer as check() for the daily limits, but counts nothing."""
         utc = datetime.fromtimestamp(now if now is not None else time.time(), timezone.utc)
         with self.lock:
-            if utc.date() != self.day:
-                return True, 0, ""
-            if self.used[group] >= DAILY[group]:
+            fresh = utc.date() != self.day   # a new day starts from zero, but a cap of zero still means closed
+            if (0 if fresh else self.used[group]) >= DAILY[group]:
                 return False, self._until_midnight(utc), "daily"
-            if self.ip_used[(group, ip)] >= IP_DAILY[group]:
+            if (0 if fresh else self.ip_used[(group, ip)]) >= IP_DAILY[group]:
                 return False, self._until_midnight(utc), "ip_daily"
             return True, 0, ""
 
@@ -463,6 +462,10 @@ def post_reset():
     with SESSIONS_LOCK:
         SESSIONS.pop(g.sid, None)
     return jsonify({"ok": True})
+
+
+if PUBLIC and os.getenv("GEMINI_API_KEY") and os.getenv("SP_PROBE_MODELS", "1") == "1":
+    agent.start_warmup()   # find the fastest working model before the first visitor arrives, and keep checking
 
 
 if __name__ == "__main__":
