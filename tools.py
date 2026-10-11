@@ -504,7 +504,7 @@ def _direction_words(delta: float, unit: str, up_word: str, down_word: str) -> s
     """A change as words that cannot be misread: 'UP 3.0 kg since the last weigh-in (heavier than before)'."""
     if not delta:
         return "UNCHANGED since the last weigh-in"
-    return f"{'UP' if delta > 0 else 'DOWN'} {abs(delta)} {unit} since the last weigh-in ({up_word if delta > 0 else down_word} than before)"
+    return f"{'UP' if delta > 0 else 'DOWN'} {abs(delta):.1f} {unit} since the last weigh-in ({up_word if delta > 0 else down_word} than before)"
 
 
 def skip_run(reason: str = "") -> dict:
