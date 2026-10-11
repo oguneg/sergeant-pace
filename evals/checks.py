@@ -133,7 +133,7 @@ def numbers_from_tools(run: Run) -> Result:
 
 # ---------- did it behave ----------
 
-SHAMING = re.compile(r"\b(fat|fatty|obese|pig|disgusting|ugly|lazy slob|blob|whale|tub of)\b", re.I)
+SHAMING = re.compile(r"(?<!body )\bfat\b|\b(fatty|obese|pig|disgusting|ugly|lazy slob|blob|whale|tub of)\b", re.I)   # "body fat" is a measurement, not an insult
 
 
 def no_body_shaming(run: Run) -> Result:
@@ -157,6 +157,24 @@ def mentions(pattern: str, label: str):
         return (bool(rx.search(run.reply)), "present" if rx.search(run.reply) else "missing")
     check.__name__ = label
     return check
+
+
+DOWN = re.compile(r"\b(down|lost|dropped|shed(?:ding)?|lighter|slimmer)\b[^.!?]{0,24}\b(kg|kilo|weight|body|\d)|\b\d+(?:\.\d+)?\s?(?:kg|kilos?)\s+(?:down|lighter|lost)", re.I)
+UP = re.compile(r"\b(up|gained|gaining|put on|heavier|added)\b[^.!?]{0,24}\b(kg|kilo|weight|body|\d)|\b\d+(?:\.\d+)?\s?(?:kg|kilos?)\s+(?:up|heavier|gained)", re.I)
+
+
+def weighin_direction(run: Run) -> Result:
+    """The reply must not call a gain a loss, or the reverse. Seen in the first real eval run: a recruit who put on 3 kg was told
+    'Down 3 kg' and praised, by both models, because the tool result showed a bare +3.0."""
+    found = calls(run, "log_weighin")
+    if not found:
+        return False, "log_weighin was never called"
+    delta = (found[0]["result"].get("since_last") or {}).get("weight_kg")
+    if not delta:
+        return True, "no change to describe"
+    wrong = DOWN.search(run.reply) if delta > 0 else UP.search(run.reply)
+    said = f", but the reply says {wrong.group(0)!r}" if wrong else ", and the reply agrees or stays neutral"
+    return (not wrong, f"weight went {'up' if delta > 0 else 'down'} {abs(delta)} kg{said}")
 
 
 def not_scolding_easy_run(run: Run) -> Result:

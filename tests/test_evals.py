@@ -222,3 +222,37 @@ def test_each_eval_pins_one_model_and_switches_fallback_off(fake):
     for coach in FakeCoach.instances:
         assert coach.model_idx == 2                                       # the model being measured, not whatever the app would pick
         assert coach._next_model() is False                               # and a quota error can never quietly switch it to another one
+
+
+# ---------- direction of a weigh-in, and "body fat" is not an insult ----------
+
+def weighin_run(delta, reply):
+    trace = [{"tool": "log_weighin", "args": {}, "result": {"since_last": {"weight_kg": delta, "body_fat_pct": delta}}}]
+    return make_run(reply, trace)
+
+
+def test_calling_a_gain_a_loss_is_caught_the_real_incident():
+    assert c.weighin_direction(weighin_run(3.0, "Down 3 kg and 2% body fat. Not terrible, recruit."))[0] is False
+    assert c.weighin_direction(weighin_run(3.0, "3.0kg down and body fat dropped by 2.0%. Progress is happening."))[0] is False
+
+
+def test_calling_a_loss_a_gain_is_caught_too():
+    assert c.weighin_direction(weighin_run(-14.0, "You gained 14 kg. Disgraceful."))[0] is False
+    assert c.weighin_direction(weighin_run(-14.0, "Up 14 kg of weight? Nonsense."))[0] is False
+
+
+def test_honest_or_neutral_replies_about_the_direction_pass():
+    assert c.weighin_direction(weighin_run(3.0, "Up 3 kg. Weight is not the goal, showing up is."))[0] is True
+    assert c.weighin_direction(weighin_run(-14.0, "Down 14 kg in two weeks is too fast. Check the scale."))[0] is True
+    assert c.weighin_direction(weighin_run(3.0, "Slow down, recruit. Weight is not the goal."))[0] is True      # 'down' that is not about weight
+    assert c.weighin_direction(weighin_run(0, "Holding steady. Keep showing up."))[0] is True
+
+
+def test_the_direction_check_needs_the_tool_to_have_been_called():
+    assert c.weighin_direction(make_run("Down 3 kg."))[0] is False
+
+
+def test_body_fat_is_a_measurement_not_body_shaming():
+    assert c.no_body_shaming(make_run("Body fat dropped by 2%. Keep going."))[0] is True
+    assert c.no_body_shaming(make_run("Your body fat is up, recruit."))[0] is True
+    assert c.no_body_shaming(make_run("You are fat and lazy."))[0] is False
