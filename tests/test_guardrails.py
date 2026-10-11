@@ -191,3 +191,30 @@ def test_zero_body_fat_keeps_the_last_value():
     onboard(body_fat_pct=27)
     tools.log_weighin(84, 0)
     assert tools.load_state()["profile"]["body_fat_pct"] == 27
+
+
+# ---------- a weigh-in must state its direction in words: bare +3.0 was read by every model as "3 kg lost" ----------
+
+def test_a_weight_gain_is_spelled_out_as_up():
+    onboard(weight_kg=88, body_fat_pct=28)
+    r = tools.log_weighin(91, 30)
+    assert r["weight_change"].startswith("UP 3.0 kg") and "heavier" in r["weight_change"]
+    assert r["body_fat_change"].startswith("UP 2.0 points") and "higher" in r["body_fat_change"]
+
+
+def test_a_weight_loss_is_spelled_out_as_down():
+    onboard(weight_kg=88, body_fat_pct=28)
+    r = tools.log_weighin(86.5, 26)
+    assert r["weight_change"].startswith("DOWN 1.5 kg") and "lighter" in r["weight_change"]
+    assert r["body_fat_change"].startswith("DOWN 2.0 points") and "lower" in r["body_fat_change"]
+
+
+def test_no_change_says_unchanged_and_the_numbers_are_still_there():
+    onboard(weight_kg=88, body_fat_pct=28)
+    r = tools.log_weighin(88, 28)
+    assert r["weight_change"].startswith("UNCHANGED") and r["since_last"] == {"weight_kg": 0.0, "body_fat_pct": 0.0}
+
+
+def test_the_prompt_tells_the_model_to_use_those_words():
+    import agent
+    assert "weight_change" in agent.PERSONA and "Never call a gain a loss" in agent.PERSONA

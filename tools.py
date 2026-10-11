@@ -490,10 +490,21 @@ def log_weighin(weight_kg: float, body_fat_pct: float) -> dict:
     change = ("relaxed" if d_effort >= 0.2 else "tightened" if d_effort <= -0.2
               else "nudged" if (d_effort or before["pace_ceiling"] != after["pace_ceiling"]) else None)
     save_state(state)
+    d_weight, d_fat = round(weight_kg - prev["weight_kg"], 1), round(p["body_fat_pct"] - prev["body_fat_pct"], 1)
     return {"logged": entry, "bmi": round(bmi(p), 1),
-            "since_last": {"weight_kg": round(weight_kg - prev["weight_kg"], 1), "body_fat_pct": round(p["body_fat_pct"] - prev["body_fat_pct"], 1)},
+            # a bare +3.0 was read by every model we tried as "3 kg lost", so the direction is spelled out in words as well
+            "weight_change": _direction_words(d_weight, "kg", "heavier", "lighter"),
+            "body_fat_change": _direction_words(d_fat, "points", "higher", "lower"),
+            "since_last": {"weight_kg": d_weight, "body_fat_pct": d_fat},
             "since_start": {"weight_kg": round(weight_kg - first["weight_kg"], 1), "body_fat_pct": round(p["body_fat_pct"] - first["body_fat_pct"], 1)},
             "limits_before": before, "limits": after, "limits_change": change, "flags": flags}
+
+
+def _direction_words(delta: float, unit: str, up_word: str, down_word: str) -> str:
+    """A change as words that cannot be misread: 'UP 3.0 kg since the last weigh-in (heavier than before)'."""
+    if not delta:
+        return "UNCHANGED since the last weigh-in"
+    return f"{'UP' if delta > 0 else 'DOWN'} {abs(delta)} {unit} since the last weigh-in ({up_word if delta > 0 else down_word} than before)"
 
 
 def skip_run(reason: str = "") -> dict:
