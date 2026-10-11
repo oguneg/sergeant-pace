@@ -131,6 +131,8 @@ python -m evals.run --models gemini-3.6-flash --runs 3      # 11 scenarios x 3 r
 - Each run uses a throw-away state file and a coach pinned to one model with fallback switched off, so a quota error is counted as an infrastructure error and never as the model failing.
 - The model is random, so each scenario runs several times and the output is a **pass rate per scenario and model**, plus how often the required-tool guard had to remind the model. It stops at `--max-turns` because it spends real API quota.
 
+**What it has found so far** is in [`evals/RESULTS.md`](evals/RESULTS.md): both models told a recruit who gained 3 kg that they were "down 3 kg" (0 of 5 correct), traced to a bare `+3.0` in a tool result and fixed by spelling the direction out in words (8 of 8 afterwards).
+
 The harness itself is tested without a network (`tests/test_evals.py`): a well-behaved fake coach must pass every scenario, and a fake coach that claims work it never did must fail them. Evals are not part of CI because they need a key; run them before changing the prompt or the model list, and keep the results out of git (`evals/results/`).
 
 ## Privacy
