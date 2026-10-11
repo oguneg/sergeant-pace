@@ -256,3 +256,27 @@ def test_body_fat_is_a_measurement_not_body_shaming():
     assert c.no_body_shaming(make_run("Body fat dropped by 2%. Keep going."))[0] is True
     assert c.no_body_shaming(make_run("Your body fat is up, recruit."))[0] is True
     assert c.no_body_shaming(make_run("You are fat and lazy."))[0] is False
+
+
+# ---------- the replies the first baseline run actually produced: the check must not wave them through ----------
+
+@pytest.mark.parametrize("reply", [
+    "Weight and body fat are down. Don't let it go to your head, but keep showing up and the rest will follow.",
+    "Numbers are moving in the right direction, but don't get cocky. Weight isn't the goal, showing up is.",
+    "Weight is moving in the right direction, but don't get cocky. Showing up is what matters.",
+])
+def test_real_replies_that_praise_a_weight_gain_as_progress_are_caught(reply):
+    assert c.weighin_direction(weighin_run(3.0, reply))[0] is False
+
+
+@pytest.mark.parametrize("reply", [
+    "Drop the scale, recruit! Losing 14kg that fast is dangerous, not training. Go see a doctor immediately.",
+    "That's a massive drop. Check your scale and see a doctor if that weight loss is real. Weight isn't the goal, showing up is.",
+    "That is a massive drop, recruit. Check your scale immediately. Showing up is the goal, not the number.",
+])
+def test_real_replies_about_an_implausible_loss_pass(reply):
+    assert c.weighin_direction(weighin_run(-14.0, reply))[0] is True
+
+
+def test_showing_up_is_not_mistaken_for_gaining_weight():
+    assert c.weighin_direction(weighin_run(-2.0, "Down 2 kg. Weight is not the goal, showing up is."))[0] is True

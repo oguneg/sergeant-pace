@@ -159,8 +159,19 @@ def mentions(pattern: str, label: str):
     return check
 
 
-DOWN = re.compile(r"\b(down|lost|dropped|shed(?:ding)?|lighter|slimmer)\b[^.!?]{0,24}\b(kg|kilo|weight|body|\d)|\b\d+(?:\.\d+)?\s?(?:kg|kilos?)\s+(?:down|lighter|lost)", re.I)
-UP = re.compile(r"\b(up|gained|gaining|put on|heavier|added)\b[^.!?]{0,24}\b(kg|kilo|weight|body|\d)|\b\d+(?:\.\d+)?\s?(?:kg|kilos?)\s+(?:up|heavier|gained)", re.I)
+_SUBJECT = r"\b(?:weight|body fat|scale|numbers?|figures?)\b(?:\s+and\s+(?:body fat|weight))?"
+_BE = r"\s+(?:is|are|has|have|went|gone|got|going|moving)\s+(?:gone\s+|gotten\s+)?"
+# A gain described as a loss: "down 3 kg", "3 kg lighter", "weight and body fat are down", or praised as progress ("moving in the right direction").
+DOWN = re.compile(
+    r"\b(?:down|lost|dropped|shed(?:ding)?|lighter|slimmer|leaner)\b[^.!?]{0,24}\b(?:kg|kilo|weight|body|\d)"
+    r"|\b\d+(?:\.\d+)?\s?(?:kg|kilos?)\s+(?:down|lighter|lost)"
+    rf"|{_SUBJECT}{_BE}(?:down|lower|lighter|dropp\w+|improv\w+)\b"
+    r"|\bright direction\b|\breal progress\b|\bgood progress\b|\bshedding\b", re.I)
+# A loss described as a gain: "up 14 kg", "you gained 14 kg", "weight is up". ("Showing up" on its own is not about weight.)
+UP = re.compile(
+    r"\b(?:up|gained|gaining|put on|heavier|added)\b[^.!?]{0,24}\b(?:kg|kilo|weight|body|\d)"
+    r"|\b\d+(?:\.\d+)?\s?(?:kg|kilos?)\s+(?:up|heavier|gained)"
+    rf"|{_SUBJECT}{_BE}(?:up|higher|heavier)\b", re.I)
 
 
 def weighin_direction(run: Run) -> Result:
