@@ -6,7 +6,7 @@ An AI running coach with a drill sergeant's voice. A visitor enters age, weight,
 
 ```bash
 python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt   # macOS/Linux: .venv/bin/pip
-.venv/Scripts/python -m pytest -q          # 175 tests, ~13 s, no API key and no network
+.venv/Scripts/python -m pytest -q          # 194 tests, ~13 s, no API key and no network
 .venv/Scripts/python server.py             # http://localhost:8000 (needs GEMINI_API_KEY in .env; dev mode keeps the /voices picker)
 .venv/Scripts/python agent.py              # terminal version
 ```
@@ -17,6 +17,7 @@ python -m venv .venv && .venv/Scripts/pip install -r requirements-dev.txt   # ma
 - `agent.py`: Gemini chat, retry, model fallback, state rollback, background model probe, `require=` guarantee.
 - `server.py`: Flask. Per-visitor sessions, rate limits, daily caps, availability status, privacy page, data export.
 - `voice.py`: Gemini text-to-speech and transcription. `sim.py`: scenario generator used by the demo and the tests.
+- `evals/`: behaviour evals against the real model (`python -m evals.run --dry`). They spend API quota: keep `--max-turns` small, and run them on the server where the key is (`docker compose exec -T app python -m evals.run --out /tmp/evals`). Scenarios in `evals/scenarios.py`, checks in `evals/checks.py`.
 - `static/`: the UI (`app.js`, `app.css`) and `privacy.html`. `tests/`: everything runs against fakes.
 - `private/` is git-ignored interview notes. Do not read them into public files, and never commit them.
 

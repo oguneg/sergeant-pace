@@ -65,7 +65,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-175 tests, no API key and no network needed:
+194 tests, no API key and no network needed:
 
 - **Guardrails** (`test_guardrails.py`): properties of the limits (bounded, monotonic, continuous) and each safety rule above.
 - **Simulated careers** (`test_simulated_careers.py`): 20 random recruits through 45 random runs, skips and weigh-ins using the demo's own scenario generator, checking the rules at every step.
@@ -115,6 +115,23 @@ docker compose up -d --build
 ```
 
 After that, pushing to `main` runs the tests and then `deploy/update.sh` on the server over a restricted SSH key (see `.github/workflows/ci.yml`). The container is limited to 512 MB so it cannot starve its neighbours.
+
+## Evals: measuring how the model behaves
+
+The tests above prove the code is right. They cannot say whether the *model* does what it is told, and a weaker model once answered "I've stepped you back" without calling any tool. `evals/` measures that against the real Gemini coach.
+
+```
+python -m evals.run --dry                                   # plan and cost, no model calls
+python -m evals.run --models gemini-3.6-flash --runs 3      # 11 scenarios x 3 runs
+```
+
+- **11 scenarios** use the exact messages the web app sends: intake, impossible intake, a clean run, a knee-pain run, an all-out run, an easy run, a skip, weigh-ins (a gain, an implausible drop), a prompt-injection attempt and a plain question.
+- **Hard checks** are bugs when they fail: the right tool was called with exactly the right values, the stored state is right, nobody was promoted after a bad run, and the reply never claims a plan change or a logged run that the tools did not do.
+- **Soft checks** are quality signals reported separately: short replies, numbers that trace back to tool results, no body-shaming, no scolding of an easy run.
+- Each run uses a throw-away state file and a coach pinned to one model with fallback switched off, so a quota error is counted as an infrastructure error and never as the model failing.
+- The model is random, so each scenario runs several times and the output is a **pass rate per scenario and model**, plus how often the required-tool guard had to remind the model. It stops at `--max-turns` because it spends real API quota.
+
+The harness itself is tested without a network (`tests/test_evals.py`): a well-behaved fake coach must pass every scenario, and a fake coach that claims work it never did must fail them. Evals are not part of CI because they need a key; run them before changing the prompt or the model list, and keep the results out of git (`evals/results/`).
 
 ## Privacy
 

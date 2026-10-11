@@ -12,3 +12,4 @@ voice_choice.json
 sessions/
 .deployed
 private/
+evals/results/
