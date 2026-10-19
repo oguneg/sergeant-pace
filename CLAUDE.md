@@ -47,4 +47,5 @@ Push to `main` runs pytest in GitHub Actions, then SSHes to the VPS with a key r
 - `/api/state` carries `status` (daily budget spent, own allowance used, Google overloaded). The page shows a banner before the form.
 - Bump `?v=` on `app.js` and `app.css` in `static/index.html` when you change them.
 - Windows: use `.venv/Scripts/python`; Docker is not installed locally, the image builds on the server.
+- **Never use `mailto:` links** (the owner's rule: nobody uses them). The contact address `hello@ogun.se` is written as plain text, and a test checks it.
 - Commit messages say why. Python 3.13; comments explain why, not what.

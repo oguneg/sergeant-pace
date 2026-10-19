@@ -133,7 +133,8 @@ def test_cached_speech_expires_with_the_retention_period(web, monkeypatch):
 
 def test_notice_gives_a_real_contact_address(web):
     text = visitor().get("/privacy").get_data(as_text=True)
-    assert 'href="mailto:hello@ogun.se"' in text and "gmail" not in text.lower()
+    assert "hello@ogun.se" in text and "gmail" not in text.lower()
+    assert "mailto" not in text.lower()        # the owner's rule: the address is plain text, never a mailto link
 
 
 def test_the_notice_page_is_not_indexed_and_needs_no_cookie(web):
